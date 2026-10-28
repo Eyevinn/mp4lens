@@ -12,7 +12,7 @@ import (
 )
 
 // partsOf decodes the first box of type typ in a file in testdata, and returns its parts and its position.
-func partsOf(t *testing.T, file, typ, parent string) ([]*Part, uint64, []byte) {
+func partsOf(t *testing.T, file, typ string) ([]*Part, uint64, []byte) {
 	t.Helper()
 	data, err := os.ReadFile("../../testdata/" + file)
 	if err != nil {
@@ -24,7 +24,7 @@ func partsOf(t *testing.T, file, typ, parent string) ([]*Part, uint64, []byte) {
 	}
 	b := data[i : i+int(binary.BigEndian.Uint32(data[i:]))]
 	box, _ := mp4.DecodeBoxSR(uint64(i), bits.NewFixedSliceReader(b))
-	return Of(typ, box, b, uint64(i), parent), uint64(i), data
+	return Of(box, b, uint64(i)), uint64(i), data
 }
 
 func summary(ps []*Part) string {
@@ -59,7 +59,7 @@ func checkBytes(t *testing.T, ps []*Part, data []byte, want map[string][]byte) {
 }
 
 func TestAvcC(t *testing.T) {
-	ps, pos, data := partsOf(t, "init.mp4", "avcC", "avc1")
+	ps, pos, data := partsOf(t, "init.mp4", "avcC")
 	if got := summary(ps); got != "SPS PPS" {
 		t.Fatalf("parts %s", got)
 	}
@@ -71,7 +71,7 @@ func TestAvcC(t *testing.T) {
 }
 
 func TestHvcC(t *testing.T) {
-	ps, _, data := partsOf(t, "hvc1_init.mp4", "hvcC", "hvc1")
+	ps, _, data := partsOf(t, "hvc1_init.mp4", "hvcC")
 	if got := summary(ps); got != "VPS SPS PPS SEI(SEI 5)" {
 		t.Fatalf("parts %s", got)
 	}
@@ -87,7 +87,7 @@ func TestHvcC(t *testing.T) {
 }
 
 func TestAv1C(t *testing.T) {
-	ps, _, data := partsOf(t, "av1_init.mp4", "av1C", "av01")
+	ps, _, data := partsOf(t, "av1_init.mp4", "av1C")
 	if got := summary(ps); got != "SequenceHeader" {
 		t.Fatalf("parts %s", got)
 	}
@@ -97,7 +97,7 @@ func TestAv1C(t *testing.T) {
 }
 
 func TestEsds(t *testing.T) {
-	ps, pos, _ := partsOf(t, "prog_8s.mp4", "esds", "mp4a")
+	ps, pos, _ := partsOf(t, "prog_8s.mp4", "esds")
 	want := "ES_Descriptor(DecoderConfigDescriptor(DecoderSpecificInfo(AudioSpecificConfig)) SLConfigDescriptor)"
 	if got := summary(ps); got != want {
 		t.Fatalf("parts %s", got)
@@ -108,15 +108,5 @@ func TestEsds(t *testing.T) {
 	if es.Pos != pos+12 || !hasLine(dc, "- objectTypeIndication: 0x40 Audio ISO/IEC 14496-3 (AAC)") ||
 		!hasLine(asc, "- audioObjectType: 2 AAC LC") || !hasLine(asc, "- samplingFrequency: 48000") {
 		t.Errorf("ES at %d\n%v\n%v", es.Pos, dc.Info, asc.Info)
-	}
-}
-
-func TestQuickTimeText(t *testing.T) {
-	ps, _, _ := partsOf(t, "qt_h264_aac.mov", "\xa9nam", "udta")
-	if len(ps) != 1 || !hasLine(ps[0], `- text: "mp4lens test"`) || ps[0].QuickTime == "" {
-		t.Fatalf("parts %v", ps)
-	}
-	if !hasLine(ps[0], "- language: und (ISO 639-2/T)") && !strings.Contains(strings.Join(ps[0].Info, "\n"), "Macintosh") {
-		t.Errorf("language: %v", ps[0].Info)
 	}
 }

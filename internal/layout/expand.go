@@ -135,3 +135,27 @@ func audioEntry(a *mp4.AudioSampleEntryBox, fields []Field, data []byte, base ui
 	}
 	return out
 }
+
+// userDataTexts splits the "texts" field of a QuickTime user data text atom into the size, language code and
+// text of each text, numbered from 1.
+func userDataTexts(b *mp4.UserDataTextBox, fields []Field, data []byte, base uint64) []Field {
+	if len(fields) == 0 || fields[len(fields)-1].Name != "texts" {
+		return fields
+	}
+	out := fields[:len(fields)-1]
+	off := int(fields[len(fields)-1].Pos - base)
+	for i, t := range b.Texts {
+		if off+4+len(t.Text) > len(data) {
+			break
+		}
+		n := " #" + strconv.Itoa(i+1)
+		out = append(out,
+			Field{Pos: base + uint64(off), Size: 2, Kind: "u16", Name: "size" + n, Value: strconv.Itoa(len(t.Text))},
+			Field{Pos: base + uint64(off+2), Size: 2, Kind: "u16", Name: "language" + n,
+				Value: strconv.Itoa(int(t.Language)) + " (" + t.LanguageString() + ")"},
+			Field{Pos: base + uint64(off+4), Size: len(t.Text), Kind: "string", Name: "text" + n,
+				Value: strconv.Quote(t.UTF8())})
+		off += 4 + len(t.Text)
+	}
+	return out
+}

@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/Eyevinn/mp4ff/mp4"
 )
 
 // decodeFile decodes a file in testdata, changed by edit if it is not nil.
@@ -344,20 +346,25 @@ func TestQuickTime(t *testing.T) {
 	for _, n := range res.Nodes {
 		got = append(got, n.Name())
 	}
-	want := `ftyp wide hdlr hdlr avc1 hdlr hdlr mp4a wave \x00\x00\x00\x00 chan ©nam text ©swr text`
+	want := `ftyp wide hdlr hdlr avc1 hdlr hdlr mp4a wave \x00\x00\x00\x00 chan ©nam ©swr`
 	if strings.Join(got, " ") != want {
 		t.Errorf("QuickTime boxes:\n got %s\nwant %s", strings.Join(got, " "), want)
 	}
-	nam := byPath(t, tr, "moov/udta/©nam")
-	if nam.Err != errQuickTimeText || len(nam.Children) != 1 || nam.Children[0].Name() != "text" {
-		t.Errorf("©nam: err=%v children=%d", nam.Err, len(nam.Children))
+	if len(tr.Errors()) != 0 {
+		t.Errorf("errors: %v", tr.Errors())
 	}
-	for _, n := range tr.Nodes {
-		for p := n.Parent; p != nil; p = p.Parent {
-			if p == nam && n.IsBox() {
-				t.Errorf("box %s left under ©nam", n.Path())
-			}
-		}
+	nam := byPath(t, tr, "moov/udta/©nam")
+	if _, ok := nam.Box.(*mp4.UserDataTextBox); !ok {
+		t.Errorf("©nam decoded as %T", nam.Box)
+	}
+	lay := tr.Layout(nam, r)
+	var names []string
+	for _, f := range lay.Fields {
+		names = append(names, f.Name+"="+f.Value)
+	}
+	wantLayout := `size=24 boxType=a96e616d size #1=12 language #1=21956 (und) text #1="mp4lens test"`
+	if got := strings.Join(names, " "); got != wantLayout {
+		t.Errorf("©nam layout:\n got %s\nwant %s", got, wantLayout)
 	}
 
 	iso, r2 := decodeFile(t, "prog_8s.mp4", nil)

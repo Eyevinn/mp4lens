@@ -90,7 +90,6 @@ names from the mp4ff version in `go.mod`, and CI checks that it is up to date. R
 | `vvcC` | NAL units with their headers |
 | `av1C` | OBUs, with the sequence header |
 | `esds` | `ES_Descriptor`, `DecoderConfigDescriptor`, `DecoderSpecificInfo` with the AudioSpecificConfig, and `SLConfigDescriptor` |
-| `©nam` and other QuickTime user data atoms | the text items, with their language |
 
 ## QuickTime
 
@@ -98,7 +97,8 @@ The QuickTime File Format and ISOBMFF share most boxes, but QuickTime adds atoms
 that ISOBMFF reserves. mp4lens marks them with `QT` and says what they are:
 
 - files with the `qt` brand, or without `ftyp`
-- QuickTime atoms, such as `wide`, `wave`, `chan`, `keys`, `fiel`, the terminator atom, and the text atoms in `udta`
+- QuickTime atoms, such as `wide`, `wave`, `chan`, `keys`, `fiel`, the terminator atom, and the text atoms in `udta`,
+  such as `©nam`, whose texts and language codes are in the fields and the layout
 - the QuickTime meta atom without version and flags, and the terminator at the end of `udta`
 - fields that overlay reserved or pre_defined bytes of ISOBMFF, such as the vendor and quality of sample
   entries, the component type of `hdlr` and the times of `mvhd`, when they are not 0

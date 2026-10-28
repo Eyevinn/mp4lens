@@ -74,6 +74,8 @@ func Box(data []byte, pos uint64, skip []Range, maxFields int) *Result {
 		switch b := box.(type) {
 		case *mp4.AudioSampleEntryBox:
 			res.Fields = audioEntry(b, res.Fields, data, pos)
+		case *mp4.UserDataTextBox:
+			res.Fields = userDataTexts(b, res.Fields, data, pos)
 		case *mp4.UnknownBox:
 			for i := range res.Fields {
 				if res.Fields[i].Name == "" && res.Fields[i].Kind == "bytes" {
@@ -227,13 +229,25 @@ func (r *recorder) SkipBytes(n int) {
 	})
 }
 
+// SetPos moves the read position. Moving back forgets the fields read from the new position on, since the
+// decoder only looked at them, and reads them again.
+func (r *recorder) SetPos(pos int) {
+	r.FixedSliceReader.SetPos(pos)
+	abs := r.base + uint64(pos)
+	i := len(r.fields)
+	for i > 0 && r.fields[i-1].Pos >= abs {
+		i--
+	}
+	r.fields, r.keys = r.fields[:i], r.keys[:i]
+}
+
 // slice returns the bytes from start to end without moving the read position.
 func (r *recorder) slice(start, end int) []byte {
 	b := make([]byte, end-start)
 	pos := r.GetPos()
-	r.SetPos(start)
+	r.FixedSliceReader.SetPos(start)
 	_ = r.LookAhead(0, b)
-	r.SetPos(pos)
+	r.FixedSliceReader.SetPos(pos)
 	return b
 }
 

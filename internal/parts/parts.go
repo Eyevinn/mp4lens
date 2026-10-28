@@ -1,6 +1,6 @@
 // Package parts finds the structures inside boxes that the boxes hold as bytes, and decodes them with mp4ff:
-// the parameter sets and SEI messages in avcC, hvcC and vvcC, the OBUs in av1C, the descriptors and the
-// AudioSpecificConfig in esds, and the text items of QuickTime user data atoms.
+// the parameter sets and SEI messages in avcC, hvcC and vvcC, the OBUs in av1C, and the descriptors and the
+// AudioSpecificConfig in esds.
 package parts
 
 import (
@@ -23,16 +23,13 @@ type Part struct {
 	Info []string
 	// Err tells why the part could not be decoded.
 	Err error
-	// QuickTime tells what a QuickTime structure is. It is empty for other parts.
-	QuickTime string
 	// Children are the parts inside this part.
 	Children []*Part
 }
 
-// Of returns the parts of a box of type boxType, decoded by mp4ff as box, or nil if it could not be decoded.
-// data holds the bytes of the box, which starts at position pos in the file. parentType is the type of the
-// parent box, or "" for a top-level box.
-func Of(boxType string, box mp4.Box, data []byte, pos uint64, parentType string) []*Part {
+// Of returns the parts of box, as decoded by mp4ff. data holds the bytes of the box, which starts at position
+// pos in the file.
+func Of(box mp4.Box, data []byte, pos uint64) []*Part {
 	f := &finder{data: data, pos: pos}
 	switch b := box.(type) {
 	case *mp4.AvcCBox:
@@ -45,9 +42,6 @@ func Of(boxType string, box mp4.Box, data []byte, pos uint64, parentType string)
 		return f.av1C(b)
 	case *mp4.EsdsBox:
 		return esdsParts(data, pos)
-	}
-	if parentType == "udta" && len(boxType) == 4 && boxType[0] == 0xa9 {
-		return quickTimeText(data, pos)
 	}
 	return nil
 }

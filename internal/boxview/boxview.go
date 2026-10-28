@@ -5,7 +5,6 @@
 package boxview
 
 import (
-	"errors"
 	"io"
 	"regexp"
 	"strconv"
@@ -89,12 +88,6 @@ func (t *Tree) add(nodes []*boxtree.Node, parent *Node, prefix string, r io.Read
 		t.Nodes = append(t.Nodes, n)
 		n.Children = t.add(bn.Children, n, n.Key+"/", r)
 		if ps := t.partsOf(n, r); len(ps) > 0 {
-			if (n.Err != nil || n.ChildErr) && ps[0].QuickTime != "" {
-				// mp4ff decodes a QuickTime user data text atom as a metadata item container, which fails
-				// on a child box that is not there. The text items replace those children.
-				n.Children, n.ChildErr, n.Err = nil, false, errQuickTimeText
-				t.dropAfter(n)
-			}
 			n.Children = append(n.Children, t.addParts(ps, n, len(n.Children))...)
 		}
 		out = append(out, n)
@@ -102,37 +95,16 @@ func (t *Tree) add(nodes []*boxtree.Node, parent *Node, prefix string, r io.Read
 	return out
 }
 
-// errQuickTimeText is the error of a QuickTime user data text atom, which mp4ff cannot decode.
-var errQuickTimeText = errors.New("mp4ff decodes this QuickTime user data text atom as a metadata item, and fails")
-
-// dropAfter removes the nodes after n from Nodes, which are its children when they have just been added.
-func (t *Tree) dropAfter(n *Node) {
-	for i := len(t.Nodes) - 1; i >= 0; i-- {
-		if t.Nodes[i] == n {
-			t.Nodes = t.Nodes[:i+1]
-			return
-		}
-	}
-}
-
 // partsOf returns the parts of the box of n, read from r.
 func (t *Tree) partsOf(n *Node, r io.ReaderAt) []*parts.Part {
-	if r == nil || n.HdrLen == 0 || n.Size > maxPartsBox || n.End() > uint64(t.Size) {
-		return nil
-	}
-	quickTimeText := n.QuickTime != "" && n.Parent != nil && n.Parent.Type == "udta"
-	if n.Box == nil && !quickTimeText {
+	if r == nil || n.Box == nil || n.HdrLen == 0 || n.Size > maxPartsBox || n.End() > uint64(t.Size) {
 		return nil
 	}
 	data := make([]byte, n.Size)
 	if _, err := r.ReadAt(data, int64(n.Pos)); err != nil {
 		return nil
 	}
-	parentType := ""
-	if n.Parent != nil {
-		parentType = n.Parent.Type
-	}
-	return parts.Of(n.Type, n.Box, data, n.Pos, parentType)
+	return parts.Of(n.Box, data, n.Pos)
 }
 
 // addParts makes nodes of the parts ps of the box or part parent, and adds them to Nodes. The first gets index
@@ -142,7 +114,7 @@ func (t *Tree) addParts(ps []*parts.Part, parent *Node, first int) []*Node {
 	for i, p := range ps {
 		bn := &boxtree.Node{Type: p.Name, Pos: p.Pos, Size: p.Size, Info: p.Info, Err: p.Err}
 		n := &Node{Node: bn, Key: parent.Key + "/" + strconv.Itoa(first+i), Parent: parent, Depth: parent.Depth + 1,
-			Part: p, QuickTime: p.QuickTime}
+			Part: p}
 		t.Nodes = append(t.Nodes, n)
 		n.Children = t.addParts(p.Children, n, 0)
 		for _, c := range n.Children {

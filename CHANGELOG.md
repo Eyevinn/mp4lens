@@ -14,6 +14,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Web page that decodes files in the browser with WebAssembly, with the same views and search
 - Byte layout of each box: position, size, type, name and value of every field that mp4ff reads,
   linked to the bytes view on the web page
-- Parts: the parameter sets and SEI messages in avcC, hvcC and vvcC, the OBUs in av1C, the descriptors
-  and AudioSpecificConfig in esds, and the text items of QuickTime user data atoms
+- Parts: the parameter sets and SEI messages in avcC, hvcC and vvcC, the OBUs in av1C, and the descriptors
+  and AudioSpecificConfig in esds
 - QuickTime boxes, fields and files are marked; search with `is:quicktime` and `is:part`

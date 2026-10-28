@@ -584,6 +584,8 @@ var readNames = map[string]readName{
 	"mp4/trun.go:173":                 {"ReadInt32", "cto", false},
 	"mp4/ttma.go:43":                  {"ReadUint32", "versionAndFlags", false},
 	"mp4/ttma.go:47":                  {"ReadUint32", "MaxActivationPeriod", false},
+	"mp4/udtatext.go:112":             {"ReadBytes", "_", false},
+	"mp4/udtatext.go:128":             {"ReadBytes", "texts", false},
 	"mp4/unknown.go:35":               {"ReadBytes", "", false},
 	"mp4/url.go:34":                   {"ReadUint32", "versionAndFlags", false},
 	"mp4/url.go:46":                   {"ReadPossiblyZeroTerminatedString", "Location", false},
