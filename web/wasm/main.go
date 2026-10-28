@@ -7,6 +7,7 @@
 //     Uint8Array, or a Blob, such as a File, that is read in slices with FileReaderSync.
 //   - mp4lensSearch(query) searches the last decoded tree and returns the keys of the matching boxes as JSON.
 //   - mp4lensLayout(key) returns the byte layout of the box with key in the last decoded tree as JSON.
+//   - mp4lensSummary() returns the summary of the last decoded file as JSON.
 package main
 
 import (
@@ -18,6 +19,7 @@ import (
 
 	"github.com/Eyevinn/mp4lens/internal/boxview"
 	"github.com/Eyevinn/mp4lens/internal/layout"
+	"github.com/Eyevinn/mp4lens/internal/summary"
 )
 
 // blobReader reads a JavaScript Blob, such as a File, with FileReaderSync.
@@ -149,6 +151,22 @@ func boxLayout(_ js.Value, args []js.Value) (ret any) {
 	return string(out)
 }
 
+func fileSummary(_ js.Value, _ []js.Value) (ret any) {
+	defer func() {
+		if r := recover(); r != nil {
+			ret = errorJSON("error", fmt.Sprint("summary panic: ", r))
+		}
+	}()
+	if last.tree == nil {
+		return errorJSON("error", "no file has been decoded")
+	}
+	out, err := json.Marshal(summary.Of(last.tree, last.r))
+	if err != nil {
+		return errorJSON("error", err.Error())
+	}
+	return string(out)
+}
+
 func errorJSON(key, msg string) string {
 	out, _ := json.Marshal(map[string]string{key: msg})
 	return string(out)
@@ -158,5 +176,6 @@ func main() {
 	js.Global().Set("mp4lensDecode", js.FuncOf(decode))
 	js.Global().Set("mp4lensSearch", js.FuncOf(search))
 	js.Global().Set("mp4lensLayout", js.FuncOf(boxLayout))
+	js.Global().Set("mp4lensSummary", js.FuncOf(fileSummary))
 	select {}
 }

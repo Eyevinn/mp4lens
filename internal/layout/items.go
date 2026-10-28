@@ -37,7 +37,39 @@ func ItemData(item, name string, fields []Field, data []byte, pos uint64) {
 	}
 }
 
-// itemMeaning returns what the value v of type dataType of a metadata item means, or "".
+// ItemValue returns the value v of type dataType of a metadata item as text, or "" if it is not text, a number or
+// a value of a known item: the text of a UTF-8 or UTF-16 value, the number of an integer, the track or disc
+// number of trkn and disk, the ID3v1 genre of gnre, and the gapless playback information of iTunSMPB. item is
+// the type of the item, such as trkn, and name is the name of a freeform item ----, such as iTunSMPB.
+func ItemValue(item, name string, dataType int, v []byte) string {
+	switch dataType {
+	case 1, 4: // UTF-8
+		if name == "iTunSMPB" {
+			if gapless := iTunSMPB(string(v)); gapless != "" {
+				return gapless
+			}
+		}
+		return string(v)
+	case 2, 5: // UTF-16
+		return utf16Text(v)
+	}
+	return itemMeaning(item, name, dataType, v)
+}
+
+// utf16Text returns the big-endian UTF-16 text in v, or "" if v has an odd length.
+func utf16Text(v []byte) string {
+	if len(v)%2 != 0 {
+		return ""
+	}
+	u := make([]uint16, len(v)/2)
+	for i := range u {
+		u[i] = binary.BigEndian.Uint16(v[2*i:])
+	}
+	return string(utf16.Decode(u))
+}
+
+// itemMeaning returns what the value v of type dataType of a metadata item means, as the layout adds it to
+// the value, or "".
 func itemMeaning(item, name string, dataType int, v []byte) string {
 	switch dataType {
 	case 1, 4: // UTF-8
@@ -51,14 +83,10 @@ func itemMeaning(item, name string, dataType int, v []byte) string {
 		}
 		return quoteText(string(v))
 	case 2, 5: // UTF-16
-		if len(v)%2 != 0 {
-			return ""
+		if text := utf16Text(v); text != "" {
+			return quoteText(text)
 		}
-		u := make([]uint16, len(v)/2)
-		for i := range u {
-			u[i] = binary.BigEndian.Uint16(v[2*i:])
-		}
-		return quoteText(string(utf16.Decode(u)))
+		return ""
 	case 21, 22: // big-endian integer
 		if len(v) == 0 || len(v) > 8 {
 			return ""

@@ -1,5 +1,6 @@
 // Command mp4lens shows the boxes of an MP4 file in the terminal, with their positions, fields and bytes,
-// and searches them. With -find, it prints the boxes that match a search instead.
+// and searches them. With -find, it prints the boxes that match a search instead, and with -summary an overview
+// of the file.
 package main
 
 import (
@@ -14,6 +15,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/Eyevinn/mp4lens/internal/boxview"
+	"github.com/Eyevinn/mp4lens/internal/summary"
 	"github.com/Eyevinn/mp4lens/internal/tui"
 )
 
@@ -39,6 +41,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	levels := fs.String("levels", "", "detail levels of the fields, as for mp4ff-info, such as all:1 for all samples")
 	query := fs.String("search", "", "search to run at the start")
 	find := fs.String("find", "", "print the boxes that match this search, and exit")
+	summarize := fs.Bool("summary", false, "print an overview of the file: brands, movie, metadata, chapters and "+
+		"tracks, and exit")
 	version := fs.Bool("version", false, "print the version and exit")
 	fs.Usage = func() {
 		fmt.Fprint(stderr, usage)
@@ -71,6 +75,10 @@ func run(args []string, stdout, stderr io.Writer) error {
 	}
 	if *find != "" {
 		return findBoxes(stdout, f, fi.Size(), *levels, *find)
+	}
+	if *summarize {
+		_, err := fmt.Fprint(stdout, summary.Of(boxview.Decode(f, fi.Size(), *levels), f).Text())
+		return err
 	}
 	m := tui.New(f, fi.Size(), tui.Options{Name: filepath.Base(path), Levels: *levels, Query: *query})
 	_, err = tea.NewProgram(m).Run()

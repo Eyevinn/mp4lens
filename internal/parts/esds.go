@@ -38,6 +38,12 @@ var streamTypes = map[byte]string{1: "ObjectDescriptor", 2: "ClockReference", 3:
 var aacObjectTypes = map[byte]string{1: "AAC Main", 2: "AAC LC", 3: "AAC SSR", 4: "AAC LTP", 5: "SBR (HE-AAC)",
 	29: "PS (HE-AACv2)", 42: "xHE-AAC (USAC)"}
 
+// AACObjectTypeName returns the name of an audio object type of an AudioSpecificConfig, such as AAC LC for 2, or
+// "" if it has none here.
+func AACObjectTypeName(objectType byte) string {
+	return aacObjectTypes[objectType]
+}
+
 // esdsParts returns the descriptors in the esds box in data, which starts at position pos in the file.
 func esdsParts(data []byte, pos uint64) []*Part {
 	const payloadStart = 12 // box header, version and flags

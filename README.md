@@ -3,7 +3,9 @@
 Look inside MP4 and QuickTime files: the box tree with the position and size of every box, the fields and bytes
 of each box, where in the bytes each field is, the structures inside boxes such as parameter sets, SEI messages
 and descriptors, and the boxes that cannot be decoded, with the boxes around them still shown. What is specific
-to QuickTime is marked. Search for box types, field values, file positions and bytes.
+to QuickTime is marked. Search for box types, field values, file positions and bytes. A file summary gives the
+overview that ffprobe and `MP4Box -info` give: brands, duration, metadata, chapters, and for each track its
+codec string, samples and bitrate.
 
 mp4lens comes as a web page and as a terminal viewer. Both decode with [mp4ff][mp4ff], and both show the same
 things and take the same searches.
@@ -26,10 +28,12 @@ mp4lens file.mp4                   # browse the boxes
 mp4lens -levels all:1 file.mp4     # with all fields, such as every sample of trun and stsz
 mp4lens -search is:error file.mp4  # start at the boxes that cannot be decoded
 mp4lens -find type:emsg file.m4s   # print the matching boxes and exit
+mp4lens -summary file.m4a          # print the file summary and exit
 ```
 
 The tree is on the left and the selected box on the right: its path, position, size, header, version and
 flags, decode error, fields, byte layout and bytes, with the header and the child box headers marked in the bytes.
+A file without errors opens with the file summary on the right, until you move in the tree.
 Press `?` for the keys. The main ones:
 
 | Key | Action |
@@ -41,6 +45,7 @@ Press `?` for the keys. The main ones:
 | `e` `E` | next and previous box that cannot be decoded |
 | `a` | switch between the main fields and all fields |
 | `m` | show more bytes and layout fields |
+| `s` | show the file summary |
 | `tab` | switch between the tree and the box pane |
 | `q` | quit |
 
@@ -65,6 +70,24 @@ A box matches a query when it matches all its terms:
 
 Put `-` before a term to match the boxes that do not match it, and quotes around text with spaces:
 `"sample size" -type:stz2`.
+
+## File summary
+
+The summary has a section for the file, the movie, the metadata, the chapters and each track:
+
+- **File**: size, brands, and how the boxes are arranged, such as moov before mdat, or an init segment and
+  fragments
+- **Movie**: duration, and the creation and modification times
+- **Metadata**: the iTunes items in `ilst`, by name, such as Title and Track Number, with their values read, the
+  freeform items by their name and domain, the QuickTime metadata by key, and the QuickTime user data texts
+- **Chapters**: from a Nero `chpl` list, and from the text samples of chapter tracks
+- **Tracks**: handler, flags, language, references, sample entries with their codec strings (RFC 6381, such as
+  `avc1.64001F` or `mp4a.40.2`), video size and colour, audio format, encryption, duration, the number of
+  samples and sync samples, the bitrate from the sample sizes, and the edit list. For a fragmented file, the
+  samples are counted in the track fragments
+
+On the web page, a file without errors opens with the summary, and the names of values that come from a box
+select that box. The file name above the summary, the File summary button and the `s` key bring it back.
 
 ## Fields, layout and parts
 
@@ -129,6 +152,7 @@ This repository holds the viewers:
 - `internal/layout`: the byte layout of a box, from a `bits.SliceReader` that records the reads of the mp4ff
   decoder, with the names from the decoder source in `names_gen.go`
 - `internal/parts`: the structures inside boxes
+- `internal/summary`: the file summary
 - `internal/tui` and `cmd/mp4lens`: the terminal viewer, built with [Bubble Tea][bubbletea]
 - `web`: the web page; `web/wasm` is the decoder for `GOOS=js GOARCH=wasm`, which runs in a Web Worker
 

@@ -213,6 +213,10 @@ h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.07em; text-transform: u
 .fields .v .qt, .layout .qt { margin-left: 8px; vertical-align: 1px; cursor: help; }
 .fields .k.linked, .fields .v.linked { cursor: crosshair; }
 .none { color: var(--muted); font-style: italic; }
+.overview h3 button, .overview .k button { all: unset; cursor: pointer; border-radius: 3px; }
+.overview h3 button:hover, .overview h3 button:focus-visible, .overview .k button:hover,
+.overview .k button:focus-visible { color: var(--ink); text-decoration: underline; }
+.overview .fields { grid-template-columns: minmax(120px, max-content) 1fr; }
 h3 small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
 .layoutwrap { overflow: auto; max-height: 360px; border: 1px solid var(--line); border-radius: 6px; }
 .layout { border-collapse: collapse; font-family: var(--font-mono); font-size: 12px; width: 100%; font-variant-numeric: tabular-nums; }
@@ -311,7 +315,7 @@ h3 small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-lef
         </div>
         <pre class="qhelp" id="queryHelp" hidden>__QUERY_HELP__
 
-Keys in the tree: / search · n and N next and previous match · e and E next and previous error · arrows move, open and close boxes</pre>
+Keys in the tree: / search · n and N next and previous match · e and E next and previous error · s file summary · arrows move, open and close boxes</pre>
       </div>
       <div class="summary" id="summary"></div>
       <div class="tree" id="tree" role="tree" tabindex="0" aria-label="Boxes"><div class="spacer" id="spacer"><div class="rows" id="rows"></div></div></div>
@@ -417,6 +421,7 @@ async function callDecoder(msg) {
 const decodeFile = (file, levels) => callDecoder({ type: "decode", fileId: file.id, source: file.blob, levels });
 const searchFile = (file, levels, query) => callDecoder({ type: "search", fileId: file.id, source: file.blob, levels, query });
 const layoutOf = (file, levels, key) => callDecoder({ type: "layout", fileId: file.id, source: file.blob, levels, key });
+const summaryOf = (file, levels) => callDecoder({ type: "summary", fileId: file.id, source: file.blob, levels });
 
 /* ---------- state ---------- */
 const state = {
@@ -435,6 +440,7 @@ const state = {
   search: null,      // { query, matches: [node], set: Set(key), hits: { key: [{pos, len}] }, capped }
   onlyMatches: false,
   layout: null,      // { key, fields, capped, error } of the selected box
+  overview: null,    // { id, data } with the summary of the file, which shows when no box is selected
   layoutLimit: 500,
 };
 
@@ -456,6 +462,7 @@ function prepare(tree) {
   state.tree = tree;
   state.nodes = nodes;
   state.layout = null;
+  state.overview = null;
   state.byKey = new Map(nodes.map((n) => [n.key, n]));
   state.errors = nodes.filter((n) => n.error);
 }
@@ -499,7 +506,8 @@ async function loadFile(file, opts = {}) {
     for (const n of state.nodes) if (small && n.children.length && n.depth < 2) state.expanded.add(n.key);
   }
   for (const e of state.errors) for (let p = e.parent; p; p = p.parent) state.expanded.add(p.key);
-  const sel = (keep && state.byKey.get(keep)) || state.errors[0] || state.nodes[0] || null;
+  // Without an error to show, the file summary shows first, with no box selected.
+  const sel = (keep && state.byKey.get(keep)) || state.errors[0] || null;
   renderSummary();
   renderSearch();
   select(sel, { scroll: true });
@@ -543,12 +551,14 @@ function renderSummary() {
     s.className = "summary ok";
     const nparts = state.nodes.filter((n) => n.part).length, nboxes = state.nodes.length - nparts;
     s.innerHTML = `<div class="headline"><span class="dot ok"></span>All ${fmtInt(nboxes)} boxes` +
-      (nparts ? ` and ${fmtInt(nparts)} ${nparts === 1 ? "part" : "parts"}` : "") + ` decoded</div>`;
+      (nparts ? ` and ${fmtInt(nparts)} ${nparts === 1 ? "part" : "parts"}` : "") + ` decoded` +
+      ` <button type="button" class="help-link" data-overview>File summary</button></div>`;
     return;
   }
   s.className = "summary bad";
   const n = errs.length;
-  let html = `<div class="headline"><span class="dot err"></span>${n === 1 ? "1 box" : fmtInt(n) + " boxes"} could not be decoded</div>`;
+  let html = `<div class="headline"><span class="dot err"></span>${n === 1 ? "1 box" : fmtInt(n) + " boxes"} could not be decoded` +
+    ` <button type="button" class="help-link" data-overview>File summary</button></div>`;
   if (readErr) html += `<div>${esc(readErr)}</div>`;
   html += "<ul>" + errs.slice(0, 50).map((e) =>
     `<li><button type="button" data-key="${esc(e.key)}"><span class="p">${esc(pathOf(e))}</span><span class="at">@${fmtInt(e.pos)}</span></button></li>`
@@ -556,6 +566,7 @@ function renderSummary() {
   s.innerHTML = html;
 }
 $("summary").addEventListener("click", (e) => {
+  if (e.target.closest("[data-overview]")) { select(null); return; }
   const b = e.target.closest("button[data-key]");
   if (b) revealAndSelect(state.byKey.get(b.dataset.key));
 });
@@ -725,6 +736,8 @@ $("tree").addEventListener("dblclick", (e) => {
 $("tree").addEventListener("keydown", (e) => {
   const vis = state.visible;
   if (!vis.length) return;
+  if (e.key === "s") { select(null); e.preventDefault(); return; }
+  if (!state.selected && /^(Arrow|Page|Home|End)/.test(e.key)) { select(vis[0], { scroll: true }); e.preventDefault(); return; }
   const i = Math.max(0, vis.indexOf(state.selected));
   const n = vis[i];
   const page = Math.max(1, Math.floor($("tree").clientHeight / ROW_H) - 1);
@@ -878,6 +891,7 @@ function markField(pos, len) {
 function renderDetail() {
   const d = $("detail");
   const n = state.selected;
+  if (!n && state.tree) { renderOverview(); return; }
   if (!n) { d.innerHTML = `<div class="none">Open an MP4 file to see its boxes.</div>`; return; }
   const chain = [];
   for (let x = n; x; x = x.parent) chain.unshift(x);
@@ -935,10 +949,36 @@ function renderDetail() {
   renderLayout(n);
   loadLayout(n);
 }
+// renderOverview shows the summary of the file, which it asks the decoder for the first time.
+async function renderOverview() {
+  const d = $("detail");
+  const crumbs = `<nav class="crumbs" aria-label="Box path"><button type="button" data-key="">${esc(state.file.name)}</button></nav>`;
+  const id = state.file.id + "|" + state.levels;
+  if (!state.overview || state.overview.id !== id) {
+    d.innerHTML = crumbs + `<div class="none">Summarizing…</div>`;
+    const token = state.token;
+    let data;
+    try {
+      ({ data } = await summaryOf(state.file, state.levels));
+    } catch (e) {
+      data = { error: e.message };
+    }
+    if (token !== state.token) return;
+    state.overview = { id, data };
+    if (state.selected) return;
+  }
+  const ov = state.overview.data;
+  if (ov.error) { d.innerHTML = crumbs + `<div class="alert err" role="alert"><strong>No summary</strong><code>${esc(ov.error)}</code></div>`; return; }
+  const link = (key, text) => key ? `<button type="button" data-key="${esc(key)}">${esc(text)}</button>` : esc(text);
+  d.innerHTML = crumbs + `<div class="head"><h2>File summary</h2></div>` + (ov.sections || []).map((sec) =>
+    `<section class="overview"><h3>${link(sec.key, sec.title)}</h3><div class="fields">` +
+    (sec.rows || []).map((r) => `<div class="k">${link(r.key, r.name)}</div><div class="v">${esc(r.value)}</div>`).join("") +
+    `</div></section>`).join("");
+}
 $("detail").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-key]");
   if (b) {
-    if (b.dataset.key === "") { $("tree").scrollTop = 0; return; }
+    if (b.dataset.key === "") { $("tree").scrollTop = 0; select(null); return; }
     revealAndSelect(state.byKey.get(b.dataset.key));
     return;
   }
@@ -997,6 +1037,7 @@ async function renderHex(n) {
 }
 $("detail").addEventListener("mouseover", (e) => {
   const n = state.selected;
+  if (!n) return;
   const row = e.target.closest(".layout tr[data-li]");
   if (row) {
     const f = layoutFor(n).fields[Number(row.dataset.li)];

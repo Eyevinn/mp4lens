@@ -9,6 +9,7 @@ import (
 
 	"github.com/Eyevinn/mp4lens/internal/boxview"
 	"github.com/Eyevinn/mp4lens/internal/layout"
+	"github.com/Eyevinn/mp4lens/internal/summary"
 )
 
 // The styles use the 16 ANSI colors, so that they follow the color theme of the terminal.
@@ -367,7 +368,8 @@ func helpText() string {
 		{"e E", "next and previous box that could not be decoded"},
 		{"a", "switch between the main fields and all fields, such as all samples"},
 		{"m", "show more bytes and layout fields"},
-		{"esc", "close the help, or clear the search"},
+		{"s", "show the summary of the file: brands, movie, metadata, chapters and tracks"},
+		{"esc", "close the help or summary, or clear the search"},
 		{"q", "quit"},
 	}
 	var sb strings.Builder
@@ -376,6 +378,22 @@ func helpText() string {
 		sb.WriteString(styleKey.Render(fmt.Sprintf("%-15s", k[0])) + k[1] + "\n")
 	}
 	sb.WriteString("\n" + styleHead.Render("Search") + "\n" + boxview.QueryHelp + "\n")
+	return sb.String()
+}
+
+// summaryText returns the summary s for the box pane.
+func summaryText(s *summary.Summary) string {
+	var sb strings.Builder
+	for i, sec := range s.Sections {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(styleHead.Render(sec.Title) + "\n")
+		for _, r := range sec.Rows {
+			sb.WriteString("  " + styleKey.Render(r.Name+":") + " " + r.Value + "\n")
+		}
+	}
+	sb.WriteString("\n" + styleFaint.Render("Move in the tree, or press s, to see the boxes.") + "\n")
 	return sb.String()
 }
 

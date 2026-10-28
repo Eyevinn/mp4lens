@@ -11,7 +11,7 @@ const ready = (async () => {
     const bytes = await (await fetch("mp4lens.wasm")).arrayBuffer();
     result = await WebAssembly.instantiate(bytes, go.importObject);
   }
-  go.run(result.instance); // Sets self.mp4lensDecode, mp4lensSearch and mp4lensLayout, and then waits forever.
+  go.run(result.instance); // Sets self.mp4lensDecode, mp4lensSearch, mp4lensLayout and mp4lensSummary, then waits.
 })();
 
 ready.then(
@@ -35,6 +35,7 @@ onmessage = async (e) => {
     }
     if (m.type === "search") json = self.mp4lensSearch(m.query);
     if (m.type === "layout") json = self.mp4lensLayout(m.key);
+    if (m.type === "summary") json = self.mp4lensSummary();
     postMessage({ type: "result", id: m.id, json, ms: performance.now() - t0 });
   } catch (err) {
     postMessage({ type: "result", id: m.id, error: String((err && err.message) || err) });

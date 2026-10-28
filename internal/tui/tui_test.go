@@ -288,3 +288,22 @@ func TestLayoutAndQuickTime(t *testing.T) {
 		t.Errorf("ISOBMFF part shows QuickTime or layout:\n%s", s)
 	}
 }
+
+func TestSummaryView(t *testing.T) {
+	m := newModel(t, "chapters_subs.m4a", nil, Options{})
+	if s := screen(m); !strings.Contains(s, "Track 1: audio") || !strings.Contains(s, "mp4a.40.2") {
+		t.Fatalf("no summary at the start:\n%s", s)
+	}
+	press(m, "down")
+	if s := screen(m); strings.Contains(s, "Track 1: audio") {
+		t.Errorf("summary still shown after a move:\n%s", s)
+	}
+	press(m, "s")
+	if s := screen(m); !strings.Contains(s, "Chapters (chpl)") {
+		t.Errorf("no summary after s:\n%s", s)
+	}
+	press(m, "esc")
+	if s := screen(m); strings.Contains(s, "Chapters (chpl)") {
+		t.Errorf("summary still shown after esc:\n%s", s)
+	}
+}

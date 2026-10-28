@@ -16,6 +16,7 @@ import (
 
 	"github.com/Eyevinn/mp4lens/internal/boxview"
 	"github.com/Eyevinn/mp4lens/internal/layout"
+	"github.com/Eyevinn/mp4lens/internal/summary"
 )
 
 // Options are the settings of the user interface.
@@ -67,6 +68,8 @@ type Model struct {
 	hexLimit    int
 	layoutLimit int
 	showHelp    bool
+	showSummary bool
+	sum         *summary.Summary // the summary of the file, made when first shown
 
 	layoutNode *boxview.Node // the box of layoutRes
 	layoutRes  *layout.Result
@@ -100,6 +103,7 @@ func New(r io.ReaderAt, size int64, opts Options) *Model {
 	m.detail = viewport.New()
 	m.detail.SoftWrap = true
 	m.setTree(boxview.Decode(r, size, m.levels), false)
+	m.showSummary = len(m.errs) == 0 && opts.Query == "" && len(m.tree.Boxes) > 0
 	m.layout()
 	return m
 }
@@ -117,7 +121,7 @@ func (m *Model) setTree(t *boxview.Tree, keep bool) {
 			selKey = s.Key
 		}
 	}
-	m.tree, m.errs = t, t.Errors()
+	m.tree, m.errs, m.sum = t, t.Errors(), nil
 	m.index = make(map[*boxview.Node]int, len(t.Nodes))
 	for i, n := range t.Nodes {
 		m.index[n] = i
@@ -254,6 +258,7 @@ func (m *Model) setCursor(i int) {
 	m.top = max(0, min(m.top, len(m.rows)-h))
 	if m.selected() != prev {
 		m.hexLimit, m.layoutLimit = hexStart, layoutStart
+		m.showSummary = false
 		m.updateDetail()
 		m.detail.GotoTop()
 	}
@@ -280,6 +285,13 @@ func (m *Model) layout() {
 func (m *Model) updateDetail() {
 	if m.showHelp {
 		m.detail.SetContent(helpText())
+		return
+	}
+	if m.showSummary {
+		if m.sum == nil {
+			m.sum = summary.Of(m.tree, m.r)
+		}
+		m.detail.SetContent(summaryText(m.sum))
 		return
 	}
 	n := m.selected()
@@ -419,9 +431,15 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		m.updateDetail()
 		m.detail.GotoTop()
 		return nil
+	case "s":
+		m.showSummary = !m.showSummary
+		m.showHelp = false
+		m.updateDetail()
+		m.detail.GotoTop()
+		return nil
 	case "esc":
-		if m.showHelp {
-			m.showHelp = false
+		if m.showHelp || m.showSummary {
+			m.showHelp, m.showSummary = false, false
 			m.updateDetail()
 		} else if m.result != nil {
 			m.clearSearch()
@@ -681,7 +699,7 @@ func (m *Model) footer() string {
 		left = styleMatch.Render(left)
 	}
 	hints := keyHints([][2]string{{"/", "search"}, {"n/N", "match"}, {"e", "error"}, {"f", "filter"},
-		{"a", "all fields"}, {"tab", "pane"}, {"?", "help"}, {"q", "quit"}})
+		{"a", "all fields"}, {"s", "summary"}, {"tab", "pane"}, {"?", "help"}, {"q", "quit"}})
 	space := m.width - ansi.StringWidth(left) - 2
 	if space < 20 {
 		return fit(" "+left, m.width)
