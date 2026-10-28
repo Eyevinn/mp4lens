@@ -1,0 +1,9 @@
+# The built web site
+web/site/
+
+# Python virtual environment for pre-commit
+venv/
+
+# Binaries built with go build
+/mp4lens
+*.test

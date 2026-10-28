@@ -1,0 +1,922 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>mp4lens</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='5' fill='%230b6b86'/%3E%3Crect x='8' y='9' width='16' height='5' rx='1' fill='white'/%3E%3Crect x='12' y='17' width='12' height='5' rx='1' fill='white' opacity='.7'/%3E%3C/svg%3E">
+<meta name="description" content="Look inside MP4 files in the browser: the box tree, box fields and bytes, decode errors, and search. Nothing is uploaded.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-screen tool. A bar on top, the box tree with its search on the left, the selected box on the
+   right (details, fields, then its bytes). Below 820px the panes stack. */
+:root {
+  --bg: #eef1f4;
+  --panel: #ffffff;
+  --ink: #18212c;
+  --muted: #5a6776;
+  --faint: #8794a3;
+  --line: #d9e0e7;
+  --hover: #f3f6f9;
+  --accent: #0b6b86;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcedf3;
+  --sel: #d3e8f0;
+  --err: #c0322b;
+  --err-soft: #fbe9e7;
+  --warn: #a8640a;
+  --warn-soft: #fbf0dc;
+  --ok: #2f7a4b;
+  --ok-soft: #e3f2e8;
+  --match: #7a3fb0;
+  --match-soft: #efe5f8;
+  --b-size: #fbe6c8;
+  --b-type: #cfe7f0;
+  --b-large: #f6d9b0;
+  --b-vf: #e6e0f3;
+  --b-chdr: #d4e9d9;
+  --b-c0: #f4f6f8;
+  --b-c1: #e9eef3;
+  --b-hit: #f2c94c;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1318; --panel: #151b22; --ink: #e2e8ee; --muted: #9aa7b5; --faint: #6f7d8c; --line: #26303a;
+    --hover: #1b232c; --accent: #4cb0cc; --accent-ink: #06222b; --accent-soft: #12313b; --sel: #173a46;
+    --err: #ff7a70; --err-soft: #3a1a18; --warn: #f0b356; --warn-soft: #382a12; --ok: #6fcf94; --ok-soft: #143222;
+    --match: #c99bf2; --match-soft: #2c2140;
+    --b-size: #4a3412; --b-type: #123a48; --b-large: #553a10; --b-vf: #2e2645; --b-chdr: #1c3b27;
+    --b-c0: #182029; --b-c1: #1e2832; --b-hit: #8a6a12;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1318; --panel: #151b22; --ink: #e2e8ee; --muted: #9aa7b5; --faint: #6f7d8c; --line: #26303a;
+  --hover: #1b232c; --accent: #4cb0cc; --accent-ink: #06222b; --accent-soft: #12313b; --sel: #173a46;
+  --err: #ff7a70; --err-soft: #3a1a18; --warn: #f0b356; --warn-soft: #382a12; --ok: #6fcf94; --ok-soft: #143222;
+  --match: #c99bf2; --match-soft: #2c2140;
+  --b-size: #4a3412; --b-type: #123a48; --b-large: #553a10; --b-vf: #2e2645; --b-chdr: #1c3b27;
+  --b-c0: #182029; --b-c1: #1e2832; --b-hit: #8a6a12;
+  color-scheme: dark;
+}
+
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.45;
+}
+[hidden] { display: none !important; }
+.app {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
+  gap: 12px;
+  box-sizing: border-box;
+}
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Top bar */
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand h1 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 24px; letter-spacing: 0.01em; }
+.brand h1 span { color: var(--accent); }
+.brand .sub { color: var(--muted); font-size: 13px; }
+.file { display: flex; flex-direction: column; min-width: 0; flex: 1 1 260px; }
+.file .name { font-family: var(--font-mono); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file .meta { color: var(--muted); font-size: 12.5px; }
+.tag { display: inline-block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--warn); background: var(--warn-soft); border-radius: 3px; padding: 0 5px; margin-left: 6px; vertical-align: 1px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn, .select {
+  border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 6px 12px; cursor: pointer;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 500; }
+.btn:hover { filter: brightness(1.05); }
+.btn.icon { padding: 6px 9px; line-height: 1; }
+.select { padding-right: 8px; }
+
+/* Panes */
+.panes { display: grid; grid-template-columns: minmax(300px, 38%) minmax(0, 1fr); gap: 12px; min-height: 0; }
+.pane { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-height: 0; min-width: 0; overflow: auto; }
+.tree-pane { display: flex; flex-direction: column; overflow: hidden; }
+
+.search { border-bottom: 1px solid var(--line); padding: 10px 12px; display: grid; gap: 6px; }
+.search form { display: flex; gap: 6px; }
+.search input[type="search"] {
+  flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: var(--bg);
+  font-family: var(--font-mono); font-size: 13px;
+}
+.search input.bad { border-color: var(--err); }
+.search .row2 { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 12.5px; color: var(--muted); min-height: 22px; }
+.search .count { font-variant-numeric: tabular-nums; }
+.search .count.err { color: var(--err); }
+.search label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.search .nav { display: inline-flex; gap: 4px; }
+.search .nav button { all: unset; cursor: pointer; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); }
+.search .nav button:disabled { opacity: 0.4; cursor: default; }
+.search .help-link { all: unset; cursor: pointer; margin-left: auto; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.qhelp { margin: 0; padding: 8px 10px; background: var(--bg); border-radius: 6px; font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; color: var(--ink); max-height: 40vh; overflow: auto; }
+
+.summary { border-bottom: 1px solid var(--line); padding: 10px 12px; font-size: 13px; }
+.summary .headline { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.summary.ok .headline { color: var(--ok); }
+.summary.bad .headline { color: var(--err); }
+.summary ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; max-height: 20vh; overflow: auto; }
+.summary li button {
+  all: unset; cursor: pointer; display: flex; gap: 8px; width: 100%; box-sizing: border-box; padding: 3px 6px; border-radius: 4px;
+  font-family: var(--font-mono); font-size: 12px; color: var(--ink);
+}
+.summary li button:hover, .summary li button:focus-visible { background: var(--err-soft); }
+.summary li .p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.summary li .at { color: var(--muted); font-variant-numeric: tabular-nums; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; }
+.dot.err { background: var(--err); }
+.dot.warn { background: var(--warn); }
+.dot.ok { background: var(--ok); }
+
+.tree { flex: 1; overflow: auto; outline: none; font-variant-numeric: tabular-nums; position: relative; }
+.tree .spacer { position: relative; }
+.tree .rows { position: absolute; left: 0; right: 0; top: 0; }
+.row {
+  display: flex; align-items: center; gap: 6px; height: 26px; padding-right: 10px; cursor: pointer; white-space: nowrap;
+  padding-left: calc(8px + var(--d) * 16px); box-sizing: border-box;
+}
+.row:hover { background: var(--hover); }
+.row.sel { background: var(--sel); }
+.tree:focus-visible .row.sel { box-shadow: inset 2px 0 0 var(--accent); }
+.tw { width: 16px; height: 16px; flex: none; display: grid; place-items: center; color: var(--faint); }
+.tw::before { content: ""; width: 0; height: 0; border-left: 5px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform 0.12s; }
+.row[aria-expanded="true"] .tw::before { transform: rotate(90deg); }
+.row:not([aria-expanded]) .tw::before { display: none; }
+.cc { font-family: var(--font-mono); font-weight: 600; white-space: pre; }
+.row.err .cc { color: var(--err); }
+.row.match .cc { color: var(--match); background: var(--match-soft); border-radius: 3px; padding: 0 3px; margin: 0 -3px; }
+.row .size { margin-left: auto; color: var(--muted); font-size: 12.5px; }
+.row .pos { color: var(--faint); font-size: 12px; font-family: var(--font-mono); min-width: 4.5em; text-align: right; }
+.tree .empty { padding: 12px; color: var(--muted); font-style: italic; }
+
+/* Detail */
+.detail { padding: 18px 20px 28px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-content: start; }
+.crumbs { display: flex; flex-wrap: wrap; gap: 2px 4px; font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); }
+.crumbs button { all: unset; cursor: pointer; padding: 1px 4px; border-radius: 3px; white-space: pre; }
+.crumbs button:hover, .crumbs button:focus-visible { background: var(--hover); color: var(--ink); }
+.crumbs .sep { color: var(--faint); }
+.head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.head h2 { margin: 0; font-family: var(--font-mono); font-weight: 600; font-size: 30px; line-height: 1.1; white-space: pre; }
+.head .long { color: var(--muted); font-size: 15px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+.pill.ok { color: var(--ok); background: var(--ok-soft); }
+.pill.err { color: var(--err); background: var(--err-soft); }
+.pill.warn { color: var(--warn); background: var(--warn-soft); }
+.pill.muted { color: var(--muted); background: var(--hover); }
+
+.facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px 20px; margin: 0; }
+.facts div { min-width: 0; }
+.facts dt { font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+.facts dd { margin: 2px 0 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.facts dd small { color: var(--muted); font-size: 12px; }
+
+.alert { border-radius: 6px; padding: 10px 12px; display: grid; gap: 4px; }
+.alert.err { background: var(--err-soft); }
+.alert.warn { background: var(--warn-soft); }
+.alert.muted { background: var(--hover); }
+.alert strong { font-weight: 600; }
+.alert.err strong { color: var(--err); }
+.alert.warn strong { color: var(--warn); }
+.alert code { font-family: var(--font-mono); font-size: 12.5px; word-break: break-word; }
+.alert button { all: unset; cursor: pointer; font-family: var(--font-mono); text-decoration: underline; text-underline-offset: 2px; }
+
+h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.fields { display: grid; grid-template-columns: minmax(120px, max-content) 1fr; gap: 3px 16px; font-size: 13px; }
+.fields .k { color: var(--muted); padding-left: calc(var(--i, 0) * 14px); }
+.fields .v { font-family: var(--font-mono); font-size: 12.5px; word-break: break-word; min-width: 0; }
+.fields .raw { grid-column: 1 / -1; font-family: var(--font-mono); font-size: 12.5px; white-space: pre-wrap; word-break: break-word; padding-left: calc(var(--i, 0) * 14px); }
+.fields mark { background: var(--b-hit); color: inherit; border-radius: 2px; }
+.none { color: var(--muted); font-style: italic; }
+
+.hexwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+.hex { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; padding: 8px 12px; width: max-content; font-variant-numeric: tabular-nums; }
+.hl { display: flex; gap: 18px; white-space: pre; }
+.hl .o { color: var(--faint); user-select: none; }
+.hl .h span, .hl .a span { border-radius: 2px; }
+.hl .h span { padding: 0 2px; }
+.hl .h span.gap { margin-left: 8px; }
+.b-size { background: var(--b-size); }
+.b-type { background: var(--b-type); }
+.b-large { background: var(--b-large); }
+.b-vf { background: var(--b-vf); }
+.b-chdr { background: var(--b-chdr); cursor: pointer; }
+.b-c0 { background: var(--b-c0); cursor: pointer; }
+.b-c1 { background: var(--b-c1); cursor: pointer; }
+.hl span.b-hit, .legend i.b-hit { background: var(--b-hit); }
+.hexbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; margin-top: 8px; font-size: 12.5px; color: var(--muted); min-height: 30px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 12px; height: 12px; border-radius: 2px; display: inline-block; border: 1px solid var(--line); }
+#hexHover { font-family: var(--font-mono); }
+
+.status { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; padding-block: 8px max(12px, env(safe-area-inset-bottom, 0px)); font-size: 12.5px; color: var(--muted); }
+.status .state { display: inline-flex; align-items: center; gap: 6px; }
+.status a { color: var(--accent); }
+
+.drop {
+  position: fixed; inset: 0; z-index: 20; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--bg) 80%, transparent); backdrop-filter: blur(2px);
+  font-family: var(--font-display); font-size: 26px; color: var(--accent);
+  border: 3px dashed var(--accent); border-radius: 12px; margin: max(12px, env(safe-area-inset-top, 0px)) 12px 12px;
+}
+
+@media (max-width: 820px) {
+  html, body { height: auto; }
+  .app { height: auto; min-height: 100%; }
+  .panes { grid-template-columns: minmax(0, 1fr); }
+  .tree-pane { height: 60vh; }
+  .detail { padding: 14px; }
+  .head h2 { font-size: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tw::before { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <div class="brand"><h1><span>mp4</span>lens</h1><span class="sub">MP4 box viewer</span></div>
+    <div class="file" aria-live="polite">
+      <div class="name" id="fileName">No file</div>
+      <div class="meta" id="fileMeta"></div>
+    </div>
+    <div class="actions">
+      <label class="btn primary" for="fileInput">Open file…</label>
+      <input type="file" id="fileInput" hidden>
+      <select class="select" id="exampleSelect" aria-label="Load an example file"></select>
+      <select class="select" id="levelSelect" aria-label="Detail level of the fields">
+        <option value="">Main fields</option>
+        <option value="all:1">All fields (all:1)</option>
+      </select>
+      <button type="button" class="btn icon" id="themeBtn" aria-label="Switch between light and dark">◐</button>
+    </div>
+  </header>
+
+  <main class="panes">
+    <section class="pane tree-pane" aria-label="Box tree">
+      <div class="search">
+        <form id="searchForm" role="search">
+          <input type="search" id="searchInput" placeholder="Search: type:trun  trackID=1  @1234  hex:000001" aria-label="Search the boxes" autocomplete="off" spellcheck="false">
+          <button type="submit" class="btn">Find</button>
+        </form>
+        <div class="row2">
+          <span class="nav"><button type="button" id="prevMatch" aria-label="Previous match" disabled>↑</button><button type="button" id="nextMatch" aria-label="Next match" disabled>↓</button></span>
+          <span class="count" id="matchCount"></span>
+          <label><input type="checkbox" id="onlyMatches"> Only matches</label>
+          <button type="button" class="help-link" id="helpToggle" aria-expanded="false" aria-controls="queryHelp">Search help</button>
+        </div>
+        <pre class="qhelp" id="queryHelp" hidden>__QUERY_HELP__
+
+Keys in the tree: / search · n and N next and previous match · e and E next and previous error · arrows move, open and close boxes</pre>
+      </div>
+      <div class="summary" id="summary"></div>
+      <div class="tree" id="tree" role="tree" tabindex="0" aria-label="Boxes"><div class="spacer" id="spacer"><div class="rows" id="rows"></div></div></div>
+    </section>
+    <section class="pane" aria-label="Selected box">
+      <div class="detail" id="detail"></div>
+    </section>
+  </main>
+
+  <footer class="status">
+    <span class="state" id="decoderState"><span class="dot warn"></span>Loading the decoder…</span>
+    <span>Files are decoded in this browser by <a href="https://github.com/Eyevinn/mp4ff">mp4ff</a> compiled to WebAssembly. Nothing is uploaded. · <a href="https://github.com/Eyevinn/mp4lens">mp4lens on GitHub</a></span>
+  </footer>
+</div>
+<div class="drop" id="drop" hidden>Drop an MP4 file to inspect it</div>
+
+<script>
+/*__EXAMPLES__*/
+
+const ROW_H = 26;
+const MAX_HITS = __MAX_HITS__;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmtInt = (n) => Number(n).toLocaleString("en-US");
+const hex = (n, w = 0) => "0x" + Number(n).toString(16).toUpperCase().padStart(w, "0");
+function fmtSize(n) {
+  if (n < 1024) return n + " B";
+  const units = ["KiB", "MiB", "GiB", "TiB"];
+  let v = n / 1024, u = 0;
+  while (v >= 1024 && u < units.length - 1) { v /= 1024; u++; }
+  return v.toFixed(v < 10 ? 2 : 1) + " " + units[u];
+}
+function b64ToBytes(b64) {
+  const bin = atob(b64), out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/* ---------- theme ---------- */
+function applyTheme(t) {
+  if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+}
+try { applyTheme(localStorage.getItem("mp4lens-theme")); } catch (e) { /* storage blocked */ }
+$("themeBtn").addEventListener("click", () => {
+  const dark = document.documentElement.dataset.theme
+    ? document.documentElement.dataset.theme === "dark"
+    : matchMedia("(prefers-color-scheme: dark)").matches;
+  const next = dark ? "light" : "dark";
+  applyTheme(next);
+  try { localStorage.setItem("mp4lens-theme", next); } catch (e) { /* storage blocked */ }
+});
+
+/* ---------- decoder (Web Worker running mp4lens.wasm) ---------- */
+const decoder = { worker: null, ready: false, failed: null, pending: new Map(), nextId: 1, waiters: [] };
+function setDecoderState(kind, text) {
+  $("decoderState").innerHTML = `<span class="dot ${kind}"></span>${esc(text)}`;
+}
+function startDecoder() {
+  try {
+    decoder.worker = new Worker("worker.js");
+  } catch (e) {
+    decoderFailed("could not start a Web Worker (" + e.message + ")");
+    return;
+  }
+  decoder.worker.onmessage = (e) => {
+    const m = e.data;
+    if (m.type === "ready") {
+      decoder.ready = true;
+      setDecoderState("ok", "Decoder ready");
+      decoder.waiters.splice(0).forEach((w) => w.resolve());
+    } else if (m.type === "fatal") {
+      decoderFailed(m.message);
+    } else if (m.type === "result") {
+      const p = decoder.pending.get(m.id);
+      decoder.pending.delete(m.id);
+      if (!p) return;
+      if (m.error) p.reject(new Error(m.error));
+      else p.resolve({ data: JSON.parse(m.json), ms: m.ms });
+    }
+  };
+  decoder.worker.onerror = (e) => decoderFailed(e.message || "the decoder worker failed to load");
+}
+function decoderFailed(msg) {
+  decoder.failed = msg;
+  setDecoderState("err", "The decoder could not load: " + msg);
+  decoder.waiters.splice(0).forEach((w) => w.reject(new Error(msg)));
+  decoder.pending.forEach((p) => p.reject(new Error(msg)));
+  decoder.pending.clear();
+}
+function whenReady() {
+  if (decoder.ready) return Promise.resolve();
+  if (decoder.failed) return Promise.reject(new Error(decoder.failed));
+  return new Promise((resolve, reject) => decoder.waiters.push({ resolve, reject }));
+}
+async function callDecoder(msg) {
+  await whenReady();
+  const id = decoder.nextId++;
+  return new Promise((resolve, reject) => {
+    decoder.pending.set(id, { resolve, reject });
+    decoder.worker.postMessage({ id, ...msg });
+  });
+}
+const decodeFile = (file, levels) => callDecoder({ type: "decode", fileId: file.id, source: file.blob, levels });
+const searchFile = (file, levels, query) => callDecoder({ type: "search", fileId: file.id, source: file.blob, levels, query });
+
+/* ---------- state ---------- */
+const state = {
+  file: null,        // { id, name, blob, size, example }
+  tree: null,
+  nodes: [],         // all nodes in file order
+  byKey: new Map(),
+  errors: [],        // nodes with an error
+  selected: null,
+  expanded: new Set(),
+  visible: [],       // the rows of the tree
+  hexLimit: 2048,
+  levels: "",
+  token: 0,
+  nextFileId: 1,
+  search: null,      // { query, matches: [node], set: Set(key), hits: { key: [{pos, len}] }, capped }
+  onlyMatches: false,
+};
+
+function prepare(tree) {
+  const nodes = [];
+  const walk = (list, parent, depth, prefix) => {
+    list.forEach((n, i) => {
+      n.parent = parent;
+      n.depth = depth;
+      n.key = prefix + i;
+      n.index = nodes.length;
+      n.children = n.children || [];
+      n.fields = n.fields || [];
+      nodes.push(n);
+      walk(n.children, n, depth + 1, n.key + "/");
+    });
+  };
+  walk(tree.boxes || [], null, 0, "");
+  state.tree = tree;
+  state.nodes = nodes;
+  state.byKey = new Map(nodes.map((n) => [n.key, n]));
+  state.errors = nodes.filter((n) => n.error);
+}
+const pathOf = (n) => { const p = []; for (let x = n; x; x = x.parent) p.unshift(x.type); return p.join("/"); };
+const firstError = (n) => { for (const c of n.children) { if (c.error) return c; const d = firstError(c); if (d) return d; } return null; };
+
+/* ---------- loading ---------- */
+async function loadFile(file, opts = {}) {
+  const token = ++state.token;
+  state.file = file;
+  $("fileName").textContent = file.name;
+  $("fileMeta").innerHTML = `${fmtInt(file.size)} bytes` + (file.size >= 1024 ? ` · ${esc(fmtSize(file.size))}` : "") +
+    (file.example ? ` <span class="tag">Example</span>` : "");
+  let tree, ms = null;
+  if (opts.tree) {
+    tree = opts.tree;
+  } else {
+    $("summary").className = "summary";
+    $("summary").innerHTML = `<div class="headline"><span class="dot warn"></span>Decoding…</div>`;
+    try {
+      ({ data: tree, ms } = await decodeFile(file, state.levels));
+    } catch (e) {
+      if (token !== state.token) return;
+      $("summary").className = "summary bad";
+      $("summary").innerHTML = `<div class="headline"><span class="dot err"></span>Could not decode the file</div><div>${esc(e.message)}</div>`;
+      $("rows").innerHTML = "";
+      $("detail").innerHTML = "";
+      return;
+    }
+  }
+  if (token !== state.token) return;
+  const keep = opts.keepSelection && state.selected ? state.selected.key : null;
+  const query = opts.keepSelection && state.search ? state.search.query : "";
+  prepare(tree);
+  state.search = null;
+  if (ms !== null) $("fileMeta").innerHTML += ` · decoded in ${ms < 10 ? ms.toFixed(1) : Math.round(ms)} ms`;
+  if (!opts.keepSelection) {
+    state.expanded.clear();
+    const small = state.nodes.length <= 400;
+    for (const n of state.nodes) if (small && n.children.length && n.depth < 2) state.expanded.add(n.key);
+  }
+  for (const e of state.errors) for (let p = e.parent; p; p = p.parent) state.expanded.add(p.key);
+  const sel = (keep && state.byKey.get(keep)) || state.errors[0] || state.nodes[0] || null;
+  renderSummary();
+  renderSearch();
+  select(sel, { scroll: true });
+  if (query) runSearch(query, { keepSelection: true });
+}
+
+async function loadExample(id) {
+  const ex = EXAMPLES.find((e) => e.id === id);
+  if (!ex) return;
+  $("exampleSelect").value = id;
+  let bytes;
+  if (ex.data) {
+    bytes = b64ToBytes(ex.data);
+  } else {
+    try {
+      const resp = await fetch("examples/" + ex.file);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      bytes = new Uint8Array(await resp.arrayBuffer());
+    } catch (e) {
+      $("summary").className = "summary bad";
+      $("summary").innerHTML = `<div class="headline"><span class="dot err"></span>Could not load the example</div><div>${esc(e.message)}</div>`;
+      return;
+    }
+  }
+  const file = { id: state.nextFileId++, name: ex.file, size: bytes.length, blob: new Blob([bytes]), example: ex };
+  await loadFile(file, { tree: state.levels === "" ? ex.tree : null });
+}
+
+function openUserFile(f) {
+  if (!f) return;
+  $("exampleSelect").value = "";
+  loadFile({ id: state.nextFileId++, name: f.name, size: f.size, blob: f, example: null });
+}
+
+/* ---------- summary ---------- */
+function renderSummary() {
+  const s = $("summary");
+  const errs = state.errors;
+  const readErr = state.tree.readError;
+  if (!errs.length && !readErr) {
+    s.className = "summary ok";
+    s.innerHTML = `<div class="headline"><span class="dot ok"></span>All ${fmtInt(state.nodes.length)} boxes decoded</div>`;
+    return;
+  }
+  s.className = "summary bad";
+  const n = errs.length;
+  let html = `<div class="headline"><span class="dot err"></span>${n === 1 ? "1 box" : fmtInt(n) + " boxes"} could not be decoded</div>`;
+  if (readErr) html += `<div>${esc(readErr)}</div>`;
+  html += "<ul>" + errs.slice(0, 50).map((e) =>
+    `<li><button type="button" data-key="${esc(e.key)}"><span class="p">${esc(pathOf(e))}</span><span class="at">@${fmtInt(e.pos)}</span></button></li>`
+  ).join("") + (n > 50 ? `<li class="none">and ${fmtInt(n - 50)} more</li>` : "") + "</ul>";
+  s.innerHTML = html;
+}
+$("summary").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-key]");
+  if (b) revealAndSelect(state.byKey.get(b.dataset.key));
+});
+
+/* ---------- search ---------- */
+async function runSearch(query, opts = {}) {
+  query = query.trim();
+  $("searchInput").value = query;
+  if (!query) { clearSearch(); return; }
+  if (!state.file) return;
+  const token = state.token;
+  $("matchCount").className = "count";
+  $("matchCount").textContent = "Searching…";
+  let res;
+  try {
+    ({ data: res } = await searchFile(state.file, state.levels, query));
+  } catch (e) {
+    res = { error: e.message };
+  }
+  if (token !== state.token) return;
+  if (res.error) {
+    state.search = null;
+    $("searchInput").classList.add("bad");
+    $("matchCount").className = "count err";
+    $("matchCount").textContent = res.error;
+    updateSearchButtons();
+    renderTree();
+    return;
+  }
+  $("searchInput").classList.remove("bad");
+  const matches = res.keys.map((k) => state.byKey.get(k)).filter(Boolean);
+  state.search = { query, matches, set: new Set(res.keys), hits: res.hits || {}, capped: !!res.capped };
+  for (const n of matches) for (let p = n.parent; p; p = p.parent) state.expanded.add(p.key);
+  const keepSel = opts.keepSelection && state.selected && state.search.set.has(state.selected.key);
+  if (matches.length && !keepSel) select(matches[0], { scroll: true });
+  else { renderTree(); renderDetail(); }
+  renderSearch();
+}
+function clearSearch() {
+  state.search = null;
+  $("searchInput").value = "";
+  $("searchInput").classList.remove("bad");
+  renderSearch();
+  renderTree();
+  renderDetail();
+}
+function renderSearch() {
+  const s = state.search, c = $("matchCount");
+  c.className = "count";
+  if (!s) {
+    c.textContent = "";
+  } else if (!s.matches.length) {
+    c.textContent = "No boxes match";
+  } else {
+    const i = state.selected ? s.matches.indexOf(state.selected) : -1;
+    c.textContent = `${i >= 0 ? fmtInt(i + 1) : "–"} of ${fmtInt(s.matches.length)} ${s.matches.length === 1 ? "box" : "boxes"}` +
+      (s.capped ? ` · byte search stopped at ${fmtInt(MAX_HITS)} hits` : "");
+  }
+  updateSearchButtons();
+}
+function updateSearchButtons() {
+  const has = !!(state.search && state.search.matches.length);
+  $("prevMatch").disabled = $("nextMatch").disabled = !has;
+}
+// step selects the next node of list after the selection in file order, or the previous one if dir is -1.
+function step(list, dir) {
+  if (!list.length) return;
+  const cur = state.selected ? state.selected.index : -1;
+  let target = dir > 0 ? list.find((n) => n.index > cur) || list[0]
+    : [...list].reverse().find((n) => n.index < cur) || list[list.length - 1];
+  revealAndSelect(target);
+}
+$("searchForm").addEventListener("submit", (e) => { e.preventDefault(); runSearch($("searchInput").value); });
+$("searchInput").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { clearSearch(); $("tree").focus(); }
+});
+$("searchInput").addEventListener("search", () => { if (!$("searchInput").value) clearSearch(); });
+$("prevMatch").addEventListener("click", () => state.search && step(state.search.matches, -1));
+$("nextMatch").addEventListener("click", () => state.search && step(state.search.matches, 1));
+$("onlyMatches").addEventListener("change", (e) => { state.onlyMatches = e.target.checked; renderTree(); scrollToSelected(); });
+$("helpToggle").addEventListener("click", () => {
+  const h = $("queryHelp");
+  h.hidden = !h.hidden;
+  $("helpToggle").setAttribute("aria-expanded", String(!h.hidden));
+  $("helpToggle").textContent = h.hidden ? "Search help" : "Hide help";
+});
+
+/* ---------- tree ---------- */
+function visibleNodes() {
+  const out = [];
+  const s = state.search;
+  let onPath = null;
+  if (state.onlyMatches && s) {
+    onPath = new Set();
+    for (const n of s.matches) for (let x = n; x; x = x.parent) onPath.add(x);
+  }
+  const walk = (list) => {
+    for (const n of list) {
+      if (onPath && !onPath.has(n)) continue;
+      out.push(n);
+      if (n.children.length && (onPath || state.expanded.has(n.key))) walk(n.children);
+    }
+  };
+  walk(state.tree ? state.tree.boxes : []);
+  return out;
+}
+function rowHtml(n) {
+  const cls = ["row"];
+  if (n === state.selected) cls.push("sel");
+  if (n.error) cls.push("err");
+  if (state.search && state.search.set.has(n.key)) cls.push("match");
+  const open = state.expanded.has(n.key) || (state.onlyMatches && state.search);
+  const exp = n.children.length ? ` aria-expanded="${!!open}"` : "";
+  const mark = n.error ? `<span class="dot err" title="Could not be decoded"></span>`
+    : n.childError ? `<span class="dot warn" title="A box inside could not be decoded"></span>` : "";
+  return `<div class="${cls.join(" ")}" role="treeitem" aria-level="${n.depth + 1}" aria-selected="${n === state.selected}"${exp} data-key="${esc(n.key)}" style="--d:${n.depth}">` +
+    `<span class="tw"></span><span class="cc">${esc(n.type)}</span>${mark}` +
+    `<span class="size">${esc(fmtSize(n.size))}</span><span class="pos">@${fmtInt(n.pos)}</span></div>`;
+}
+function renderTree() {
+  state.visible = visibleNodes();
+  $("spacer").style.height = state.visible.length * ROW_H + "px";
+  renderRows();
+}
+// renderRows draws the rows in view, and some around them.
+function renderRows() {
+  const tree = $("tree"), vis = state.visible;
+  if (!vis.length) {
+    $("rows").innerHTML = state.tree ? `<div class="empty">No boxes to show.</div>` : "";
+    return;
+  }
+  const first = Math.max(0, Math.floor(tree.scrollTop / ROW_H) - 20);
+  const last = Math.min(vis.length, Math.ceil((tree.scrollTop + tree.clientHeight) / ROW_H) + 20);
+  $("rows").style.transform = `translateY(${first * ROW_H}px)`;
+  let html = "";
+  for (let i = first; i < last; i++) html += rowHtml(vis[i]);
+  $("rows").innerHTML = html;
+}
+let rowsQueued = false;
+$("tree").addEventListener("scroll", () => {
+  if (rowsQueued) return;
+  rowsQueued = true;
+  requestAnimationFrame(() => { rowsQueued = false; renderRows(); });
+});
+window.addEventListener("resize", () => renderRows());
+function scrollToSelected() {
+  const i = state.visible.indexOf(state.selected);
+  if (i < 0) return;
+  const tree = $("tree"), top = i * ROW_H;
+  if (top < tree.scrollTop) tree.scrollTop = top;
+  else if (top + ROW_H > tree.scrollTop + tree.clientHeight) tree.scrollTop = top + ROW_H - tree.clientHeight;
+  renderRows();
+}
+$("tree").addEventListener("click", (e) => {
+  const row = e.target.closest(".row");
+  if (!row) return;
+  const n = state.byKey.get(row.dataset.key);
+  if (e.target.closest(".tw") && n.children.length) { toggle(n); return; }
+  select(n);
+});
+$("tree").addEventListener("dblclick", (e) => {
+  const row = e.target.closest(".row");
+  if (row) { const n = state.byKey.get(row.dataset.key); if (n.children.length) toggle(n); }
+});
+$("tree").addEventListener("keydown", (e) => {
+  const vis = state.visible;
+  if (!vis.length) return;
+  const i = Math.max(0, vis.indexOf(state.selected));
+  const n = vis[i];
+  const page = Math.max(1, Math.floor($("tree").clientHeight / ROW_H) - 1);
+  let next = null;
+  switch (e.key) {
+    case "ArrowDown": next = vis[Math.min(i + 1, vis.length - 1)]; break;
+    case "ArrowUp": next = vis[Math.max(i - 1, 0)]; break;
+    case "PageDown": next = vis[Math.min(i + page, vis.length - 1)]; break;
+    case "PageUp": next = vis[Math.max(i - page, 0)]; break;
+    case "Home": next = vis[0]; break;
+    case "End": next = vis[vis.length - 1]; break;
+    case "ArrowRight":
+      if (n.children.length && !state.expanded.has(n.key) && !state.onlyMatches) { toggle(n); e.preventDefault(); return; }
+      next = vis[i + 1] && vis[i + 1].parent === n ? vis[i + 1] : null; break;
+    case "ArrowLeft":
+      if (n.children.length && state.expanded.has(n.key) && !state.onlyMatches) { toggle(n); e.preventDefault(); return; }
+      next = n.parent; break;
+    case "Enter": case " ":
+      if (n.children.length) toggle(n); e.preventDefault(); return;
+    case "n": if (state.search) step(state.search.matches, 1); e.preventDefault(); return;
+    case "N": if (state.search) step(state.search.matches, -1); e.preventDefault(); return;
+    case "e": step(state.errors, 1); e.preventDefault(); return;
+    case "E": step(state.errors, -1); e.preventDefault(); return;
+    default: return;
+  }
+  e.preventDefault();
+  if (next) select(next, { scroll: true });
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.target.closest("input, select, textarea")) {
+    e.preventDefault();
+    $("searchInput").focus();
+    $("searchInput").select();
+  }
+});
+function toggle(n) {
+  if (state.expanded.has(n.key)) state.expanded.delete(n.key); else state.expanded.add(n.key);
+  renderTree();
+}
+function revealAndSelect(n) {
+  if (!n) return;
+  for (let p = n.parent; p; p = p.parent) state.expanded.add(p.key);
+  if (state.onlyMatches && state.search && !state.search.set.has(n.key)) {
+    state.onlyMatches = false;
+    $("onlyMatches").checked = false;
+  }
+  select(n, { scroll: true });
+}
+function select(n, opts = {}) {
+  state.selected = n;
+  state.hexLimit = 2048;
+  renderTree();
+  renderDetail();
+  renderSearch();
+  if (opts.scroll) scrollToSelected();
+}
+
+/* ---------- detail ---------- */
+function hitsIn(start, end) {
+  const out = [];
+  if (!state.search) return out;
+  for (const spans of Object.values(state.search.hits)) {
+    for (const h of spans) if (h.pos < end && h.pos + h.len > start) out.push(h);
+  }
+  return out;
+}
+function renderFields(fields) {
+  if (!fields.length) return `<div class="none">No fields for this box.</div>`;
+  return `<div class="fields">` + fields.map((f) =>
+    f.key ? `<div class="k" style="--i:${f.indent || 0}">${esc(f.key)}</div><div class="v">${esc(f.value)}</div>`
+      : `<div class="raw" style="--i:${f.indent || 0}">${esc(f.value)}</div>`
+  ).join("") + `</div>`;
+}
+function renderDetail() {
+  const d = $("detail");
+  const n = state.selected;
+  if (!n) { d.innerHTML = `<div class="none">Open an MP4 file to see its boxes.</div>`; return; }
+  const chain = [];
+  for (let x = n; x; x = x.parent) chain.unshift(x);
+  const crumbs = `<nav class="crumbs" aria-label="Box path"><button type="button" data-key="">${esc(state.file.name)}</button>` +
+    chain.map((x) => `<span class="sep">›</span><button type="button" data-key="${esc(x.key)}">${esc(x.type)}</button>`).join("") + `</nav>`;
+  const status = n.error ? `<span class="pill err">Could not be decoded</span>`
+    : n.childError ? `<span class="pill warn">Error in a box inside</span>`
+    : n.unknown ? `<span class="pill muted">Unknown box type</span>`
+    : n.hdrLen === 0 ? `<span class="pill warn">No box header</span>`
+    : `<span class="pill ok">Decoded</span>`;
+  const long = n.hdrLen === 0 ? "Bytes without a box header" : (n.name ? n.name + " box" : "");
+  const hasVF = n.version !== undefined;
+  const fileEnd = state.tree.size;
+  const end = n.pos + n.size;
+  const facts = [
+    ["Position", `${fmtInt(n.pos)} <small>${hex(n.pos)}</small>`],
+    ["Size", `${fmtInt(n.size)} <small>${n.size >= 1024 ? esc(fmtSize(n.size)) : "bytes"}</small>`],
+    ["Header", n.hdrLen ? `${n.hdrLen} bytes${n.hdrLen === 16 ? " <small>64-bit size</small>" : ""}` : "none"],
+    ["Ends at", `${fmtInt(end)} <small>${hex(end)}</small>`],
+  ];
+  if (hasVF) facts.push(["Version · flags", `${n.version} · ${esc(n.flags)}`]);
+  if (n.children.length) facts.push(["Child boxes", fmtInt(n.children.length)]);
+
+  let alerts = "";
+  if (n.error) alerts += `<div class="alert err" role="alert"><strong>Decode error</strong><code>${esc(n.error)}</code></div>`;
+  if (n.childError) {
+    const fe = firstError(n);
+    alerts += `<div class="alert warn"><strong>A box inside could not be decoded</strong><div>The error is shown on ` +
+      (fe ? `<button type="button" data-key="${esc(fe.key)}">${esc(pathOf(fe))}</button>` : "a child box") +
+      `. The boxes around it are decoded.</div></div>`;
+  }
+  if (end > fileEnd) alerts += `<div class="alert warn"><strong>Truncated</strong><div>The box continues ${fmtInt(end - fileEnd)} bytes past the end of the file.</div></div>`;
+  if (n.unknown) alerts += `<div class="alert muted"><div>mp4ff does not know this box type, so only its header is decoded.</div></div>`;
+
+  d.innerHTML = crumbs +
+    `<div class="head"><h2>${esc(n.type)}</h2>${long ? `<span class="long">${esc(long)}</span>` : ""}${status}</div>` +
+    `<dl class="facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>` +
+    alerts +
+    `<section><h3>Fields</h3>${renderFields(n.fields)}</section>` +
+    `<section><h3>Bytes</h3><div class="hexwrap"><div class="hex" id="hex">Reading…</div></div>` +
+    `<div class="hexbar"><div class="legend">` +
+    `<span><i class="b-size"></i>size</span><span><i class="b-type"></i>type</span>` +
+    (n.hdrLen === 16 ? `<span><i class="b-large"></i>64-bit size</span>` : "") +
+    (hasVF ? `<span><i class="b-vf"></i>version · flags</span>` : "") +
+    (n.children.length ? `<span><i class="b-chdr"></i>child box header</span><span><i class="b-c1"></i>child box</span>` : "") +
+    (hitsIn(n.pos, end).length ? `<span><i class="b-hit"></i>search hit</span>` : "") +
+    `</div><span id="hexHover"></span><span id="hexMore"></span></div></section>`;
+  renderHex(n);
+}
+$("detail").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-key]");
+  if (b) {
+    if (b.dataset.key === "") { $("tree").scrollTop = 0; return; }
+    revealAndSelect(state.byKey.get(b.dataset.key));
+    return;
+  }
+  const more = e.target.closest("#showMore");
+  if (more) { state.hexLimit *= 4; renderHex(state.selected); return; }
+  const byte = e.target.closest("span[data-c]");
+  if (byte) revealAndSelect(state.selected.children[Number(byte.dataset.c)]);
+});
+
+async function renderHex(n) {
+  const token = state.token + ":" + n.key + ":" + state.hexLimit;
+  renderHex.current = token;
+  const avail = Math.max(0, Math.min(n.size, state.tree.size - n.pos));
+  const count = Math.min(avail, state.hexLimit);
+  const bytes = new Uint8Array(await state.file.blob.slice(n.pos, n.pos + count).arrayBuffer());
+  if (renderHex.current !== token || !$("hex")) return;
+  const kids = n.children.map((c, i) => ({ s: c.pos - n.pos, e: c.pos - n.pos + c.size, h: c.hdrLen, i }));
+  const hits = hitsIn(n.pos, n.pos + count).map((h) => ({ s: h.pos - n.pos, e: h.pos - n.pos + h.len }));
+  const hasVF = n.version !== undefined;
+  const cls = (i) => {
+    let c = "", k;
+    if (n.hdrLen && i < n.hdrLen) c = i < 4 ? "b-size" : i < 8 ? "b-type" : "b-large";
+    else if (n.hdrLen && hasVF && i < n.hdrLen + 4) c = "b-vf";
+    else {
+      for (const kid of kids) {
+        if (i >= kid.s && i < kid.e) { c = i < kid.s + Math.max(kid.h, 8) ? "b-chdr" : (kid.i % 2 ? "b-c1" : "b-c0"); k = kid.i; break; }
+      }
+    }
+    for (const h of hits) if (i >= h.s && i < h.e) { c = (c + " b-hit").trim(); break; }
+    return [c, k];
+  };
+  const out = [];
+  for (let r = 0; r < bytes.length; r += 16) {
+    let h = "", a = "";
+    for (let j = 0; j < 16; j++) {
+      const i = r + j;
+      const gap = j === 8 ? " gap" : "";
+      if (i >= bytes.length) { h += `<span class="${gap.trim()}">  </span>`; continue; }
+      const [c, k] = cls(i);
+      const attr = k !== undefined ? ` data-c="${k}" data-i="${i}"` : ` data-i="${i}"`;
+      const b = bytes[i];
+      h += `<span class="${(c + gap).trim()}"${attr}>${b.toString(16).padStart(2, "0")}</span>`;
+      a += `<span class="${c}"${attr}>${b >= 0x20 && b < 0x7f ? esc(String.fromCharCode(b)) : "·"}</span>`;
+    }
+    out.push(`<div class="hl"><span class="o">${(n.pos + r).toString(16).padStart(8, "0")}</span><span class="h">${h}</span><span class="a">${a}</span></div>`);
+  }
+  $("hex").innerHTML = out.length ? out.join("") : `<span class="none">No bytes of this box are in the file.</span>`;
+  const more = $("hexMore");
+  if (count < avail) {
+    more.innerHTML = `Showing ${fmtInt(count)} of ${fmtInt(avail)} bytes · <button type="button" class="btn" id="showMore">Show more</button>`;
+  } else {
+    more.textContent = avail < n.size ? `${fmtInt(avail)} of ${fmtInt(n.size)} bytes are in the file` : "";
+  }
+}
+$("detail").addEventListener("mouseover", (e) => {
+  const s = e.target.closest("span[data-i]");
+  const out = $("hexHover");
+  if (!out) return;
+  if (!s) { out.textContent = ""; return; }
+  const n = state.selected, i = Number(s.dataset.i), abs = n.pos + i;
+  let what = `${n.type} +${i}`;
+  if (s.dataset.c !== undefined) {
+    const c = n.children[Number(s.dataset.c)];
+    what = `${c.type} +${abs - c.pos} (click to open)`;
+  }
+  out.textContent = `${hex(abs)} · ${fmtInt(abs)} · ${what}`;
+});
+
+/* ---------- controls ---------- */
+$("exampleSelect").innerHTML = `<option value="">Examples…</option>` +
+  EXAMPLES.map((e) => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join("");
+$("exampleSelect").addEventListener("change", (e) => {
+  if (!e.target.value) return;
+  const url = new URL(location.href);
+  url.searchParams.set("example", e.target.value);
+  history.replaceState(null, "", url);
+  loadExample(e.target.value);
+});
+$("fileInput").addEventListener("change", (e) => { openUserFile(e.target.files[0]); e.target.value = ""; });
+$("levelSelect").addEventListener("change", (e) => {
+  state.levels = e.target.value;
+  if (state.file) loadFile(state.file, { keepSelection: true });
+});
+let dragDepth = 0;
+window.addEventListener("dragenter", (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes("Files")) { dragDepth++; $("drop").hidden = false; } });
+window.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; $("drop").hidden = true; } });
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dragDepth = 0;
+  $("drop").hidden = true;
+  if (e.dataTransfer.files.length) openUserFile(e.dataTransfer.files[0]);
+});
+
+startDecoder();
+const startExample = new URL(location.href).searchParams.get("example");
+loadExample(EXAMPLES.some((e) => e.id === startExample) ? startExample : EXAMPLES[0].id);
+</script>
+</body>
+</html>
