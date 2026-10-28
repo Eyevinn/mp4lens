@@ -110,3 +110,17 @@ func TestEsds(t *testing.T) {
 		t.Errorf("ES at %d\n%v\n%v", es.Pos, dc.Info, asc.Info)
 	}
 }
+
+func TestAudioSpecificConfigHeaderOnly(t *testing.T) {
+	// The AudioSpecificConfig of an xHE-AAC (USAC) stream, whose object type mp4ff reads but not the rest.
+	usac := []byte{0xf9, 0x46, 0x43, 0x22, 0x1c, 0xc0, 0x58, 0x52, 0x00, 0x20, 0x00, 0xa0, 0x40, 0x46, 0xd0, 0xb8, 0x00}
+	p := audioSpecificConfig(usac, 100)
+	if p.Err != nil || !hasLine(p, "- audioObjectType: 42 xHE-AAC (USAC)") ||
+		!hasLine(p, "- samplingFrequency: 48000") || !hasLine(p, "- channelConfiguration: 2") {
+		t.Errorf("USAC: err %v\n%v", p.Err, p.Info)
+	}
+	// An AAC LC config that ends before its channel configuration is still an error.
+	if p := audioSpecificConfig([]byte{0x11}, 100); p.Err == nil {
+		t.Errorf("short AAC LC: no error\n%v", p.Info)
+	}
+}

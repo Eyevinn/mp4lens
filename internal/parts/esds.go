@@ -143,13 +143,30 @@ func esFields(p *Part, body []byte) int {
 	return off
 }
 
+// fullASCTypes are the audio object types whose AudioSpecificConfig mp4ff decodes in full. For other types,
+// such as USAC, it decodes the leading fields.
+var fullASCTypes = map[byte]bool{aac.AAClc: true, aac.HEAACv1: true, aac.HEAACv2: true}
+
 // audioSpecificConfig decodes the AudioSpecificConfig in b, at position pos in the file.
 func audioSpecificConfig(b []byte, pos uint64) *Part {
 	p := &Part{Name: "AudioSpecificConfig", LongName: "MPEG-4 Audio Specific Config", Pos: pos, Size: uint64(len(b))}
 	p.Info = []string{fmt.Sprintf("[AudioSpecificConfig] size=%d", len(b))}
 	asc, err := aac.DecodeAudioSpecificConfig(bytes.NewReader(b))
 	if err != nil {
-		p.Err = err
+		hdr, hdrErr := aac.DecodeAudioSpecificConfigHeader(bytes.NewReader(b))
+		if hdrErr != nil {
+			p.Err = err
+			return p
+		}
+		p.Info = append(p.Info,
+			field(0, "audioObjectType", fmt.Sprintf("%d %s", hdr.ObjectType, aacObjectTypes[hdr.ObjectType])),
+			field(0, "samplingFrequency", hdr.SamplingFrequency),
+			field(0, "channelConfiguration", hdr.ChannelConfiguration))
+		if fullASCTypes[hdr.ObjectType] {
+			p.Err = err
+		} else {
+			p.Info = append(p.Info, field(0, "note", "mp4ff decodes only these leading fields of this object type"))
+		}
 		return p
 	}
 	p.Info = append(p.Info,
