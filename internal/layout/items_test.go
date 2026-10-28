@@ -32,7 +32,7 @@ func TestItemData(t *testing.T) {
 	}{
 		{"trkn", "", 0, []byte{0, 0, 0, 5, 0, 13, 0, 0}, "track 5 of 13"},
 		{"disk", "", 0, []byte{0, 0, 0, 1, 0, 2}, "disc 1 of 2"},
-		{"gnre", "", 0, []byte{0, 0x12}, "ID3v1 genre 17, the value minus 1"},
+		{"gnre", "", 0, []byte{0, 0x12}, "ID3v1 genre 17"},
 		{"----", "iTunSMPB", 1, []byte(smpb), "encoder delay 2112, padding 509, 1291715 samples"},
 		{"----", "iTunNORM", 1, []byte(" 0000085B"), `" 0000085B"`},
 		{"©nam", "", 1, []byte("Owner"), ""}, // the value shows short texts already

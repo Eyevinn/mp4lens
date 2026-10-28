@@ -2,11 +2,12 @@ package layout
 
 import (
 	"encoding/binary"
-	"fmt"
 	"strconv"
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/Eyevinn/mp4ff/mp4"
 )
 
 // maxItemText is the number of bytes of a text value that ItemData shows.
@@ -37,23 +38,26 @@ func ItemData(item, name string, fields []Field, data []byte, pos uint64) {
 	}
 }
 
-// ItemValue returns the value v of type dataType of a metadata item as text, or "" if it is not text, a number or
-// a value of a known item: the text of a UTF-8 or UTF-16 value, the number of an integer, the track or disc
-// number of trkn and disk, the ID3v1 genre of gnre, and the gapless playback information of iTunSMPB. item is
-// the type of the item, such as trkn, and name is the name of a freeform item ----, such as iTunSMPB.
+// ItemValue returns the value v of type dataType of a metadata item as text, or "" if it is not text and mp4ff
+// has no meaning for it: the text of a UTF-8 or UTF-16 value, or the meaning that mp4.DataBox.Meaning gives, such
+// as the number of an integer, the track number of trkn or the gapless playback information of iTunSMPB. item
+// is the type of the item, such as trkn, and name is the name of a freeform item ----, such as iTunSMPB.
 func ItemValue(item, name string, dataType int, v []byte) string {
+	if meaning := dataMeaning(item, name, dataType, v); meaning != "" {
+		return meaning
+	}
 	switch dataType {
 	case 1, 4: // UTF-8
-		if name == "iTunSMPB" {
-			if gapless := iTunSMPB(string(v)); gapless != "" {
-				return gapless
-			}
-		}
 		return string(v)
 	case 2, 5: // UTF-16
 		return utf16Text(v)
 	}
-	return itemMeaning(item, name, dataType, v)
+	return ""
+}
+
+// dataMeaning returns what mp4ff says that the value v of type dataType of a metadata item means, or "".
+func dataMeaning(item, name string, dataType int, v []byte) string {
+	return (&mp4.DataBox{DataType: uint32(dataType), Data: v}).Meaning(item, name)
 }
 
 // utf16Text returns the big-endian UTF-16 text in v, or "" if v has an odd length.
@@ -69,15 +73,13 @@ func utf16Text(v []byte) string {
 }
 
 // itemMeaning returns what the value v of type dataType of a metadata item means, as the layout adds it to
-// the value, or "".
+// the value, or "": the meaning from mp4ff, or the text of a value that the layout shows in hex.
 func itemMeaning(item, name string, dataType int, v []byte) string {
+	if meaning := dataMeaning(item, name, dataType, v); meaning != "" {
+		return meaning
+	}
 	switch dataType {
 	case 1, 4: // UTF-8
-		if name == "iTunSMPB" {
-			if gapless := iTunSMPB(string(v)); gapless != "" {
-				return gapless
-			}
-		}
 		if strings.HasPrefix(bytesText(v), `"`) {
 			return "" // the value shows the text already
 		}
@@ -86,48 +88,8 @@ func itemMeaning(item, name string, dataType int, v []byte) string {
 		if text := utf16Text(v); text != "" {
 			return quoteText(text)
 		}
-		return ""
-	case 21, 22: // big-endian integer
-		if len(v) == 0 || len(v) > 8 {
-			return ""
-		}
-		var n uint64
-		for _, b := range v {
-			n = n<<8 | uint64(b)
-		}
-		if dataType == 21 && v[0]&0x80 != 0 {
-			return strconv.FormatInt(int64(n<<(64-8*len(v)))>>(64-8*len(v)), 10)
-		}
-		return strconv.FormatUint(n, 10)
-	case 0: // implicit, given by the item type
-		switch {
-		case (item == "trkn" || item == "disk") && len(v) >= 6:
-			what := map[string]string{"trkn": "track", "disk": "disc"}[item]
-			return fmt.Sprintf("%s %d of %d", what, binary.BigEndian.Uint16(v[2:]), binary.BigEndian.Uint16(v[4:]))
-		case item == "gnre" && len(v) == 2 && binary.BigEndian.Uint16(v) > 0:
-			return fmt.Sprintf("ID3v1 genre %d, the value minus 1", binary.BigEndian.Uint16(v)-1)
-		}
 	}
 	return ""
-}
-
-// iTunSMPB returns the gapless playback information in the text of an iTunSMPB item: the encoder delay, the
-// padding and the number of samples, in hexadecimal after a first 0 field. It returns "" if text is not in
-// that form.
-func iTunSMPB(text string) string {
-	words := strings.Fields(text)
-	if len(words) < 4 {
-		return ""
-	}
-	var vals [3]uint64
-	for i := range vals {
-		v, err := strconv.ParseUint(words[i+1], 16, 64)
-		if err != nil {
-			return ""
-		}
-		vals[i] = v
-	}
-	return fmt.Sprintf("encoder delay %d, padding %d, %d samples", vals[0], vals[1], vals[2])
 }
 
 // quoteText quotes text, cut to maxItemText bytes.
