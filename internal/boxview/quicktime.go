@@ -77,7 +77,15 @@ func boxQuickTime(n *Node) string {
 				len(b.TrailingBytes))
 		}
 	case *mp4.HdlrBox:
-		if b.PreDefined != 0 {
+		inMinf := n.Parent != nil && n.Parent.Type == "minf"
+		switch {
+		case fourCC(b.PreDefined) == "dhlr" || inMinf && b.PreDefined == 0:
+			return fmt.Sprintf("QuickTime data handler in minf, which ISOBMFF does not have; its handler type %q is "+
+				"the type of data reference that it reads, such as alis for the alis entries of dref", b.HandlerType)
+		case fourCC(b.PreDefined) == "mhlr":
+			return "QuickTime media handler (component type mhlr, pre_defined 0 in ISOBMFF); the handler type is the " +
+				"media type, as in ISOBMFF"
+		case b.PreDefined != 0:
 			return fmt.Sprintf("QuickTime component type %q, which is pre_defined (0) in ISOBMFF", fourCC(b.PreDefined))
 		}
 	case *mp4.MvhdBox:

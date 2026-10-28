@@ -431,3 +431,15 @@ func TestPlainContainer(t *testing.T) {
 		t.Error("udta with a terminator is a plain container")
 	}
 }
+
+func TestQuickTimeHandlers(t *testing.T) {
+	tr, _ := decodeFile(t, "qt_h264_aac.mov", nil)
+	media := byPath(t, tr, "moov/trak/mdia/hdlr")
+	data := byPath(t, tr, "moov/trak/mdia/minf/hdlr")
+	if !strings.HasPrefix(media.QuickTime, "QuickTime media handler") {
+		t.Errorf("mdia/hdlr: %q", media.QuickTime)
+	}
+	if !strings.HasPrefix(data.QuickTime, "QuickTime data handler in minf") {
+		t.Errorf("minf/hdlr: %q", data.QuickTime)
+	}
+}

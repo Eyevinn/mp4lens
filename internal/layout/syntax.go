@@ -89,10 +89,11 @@ var syntaxes = map[string]boxSyntax{
 		"QuickTimeQuality": {"pre_defined", "0 in ISOBMFF", nil},
 	}},
 	"hdlr": {spec: isobmff + " 8.4.3", fields: map[string]fieldSyntax{
-		"PreDefined":  {"pre_defined", "0 in ISOBMFF", nil},
-		"HandlerType": {"handler_type", "type of the media or metadata, such as vide, soun or meta", nil},
-		"Reserved[]":  {"reserved", "reserved, 0", nil},
-		"bytesLeft":   {"name", "readable name of the track type, as zero-terminated UTF-8", nil},
+		"PreDefined": {"pre_defined", "0 in ISOBMFF", nil},
+		"HandlerType": {"handler_type", "type of the media or metadata, such as vide, soun or meta; in a QuickTime " +
+			"data handler, the type of data reference, such as alis", nil},
+		"Reserved[]": {"reserved", "reserved, 0", nil},
+		"bytesLeft":  {"name", "readable name of the track type, as zero-terminated UTF-8", nil},
 	}},
 	"stsd": {spec: isobmff + " 8.5.2", fields: map[string]fieldSyntax{
 		"sampleCount": {"entry_count", "number of sample entries that follow", nil},
@@ -209,6 +210,8 @@ var syntaxes = map[string]boxSyntax{
 		"ns":    {"key_namespace", "naming scheme of the key, such as mdta", nil},
 		"Value": {"key_value", "the key, such as com.apple.quicktime.make", nil},
 	}},
+	"alis": {spec: quickTime + ", data reference atoms", flags: []flagBit{{0x1, "media data in the same file"}},
+		fields: map[string]fieldSyntax{"Data": {"data", "Macintosh alias record of the file with the media data", nil}}},
 	"gmin": {spec: quickTime + ", base media info atom", fields: map[string]fieldSyntax{
 		"GraphicsMode": {"graphics mode", "QuickDraw transfer mode", nil},
 		"Opcolor[]":    {"opcolor", "red, green and blue of the transfer mode", nil},
