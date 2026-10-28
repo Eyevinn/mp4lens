@@ -48,13 +48,14 @@ func TestSummary(t *testing.T) {
 		{"chapters_subs.m4a", "Metadata", "Title", "Chapters"},
 		{"chapters_subs.m4a", "Metadata", "Track Number", "track 5 of 13"},
 		{"chapters_subs.m4a", "Chapters (chpl)", "0:00:00.500", "Second chapter"},
-		{"chapters_subs.m4a", "Chapters (track 3)", "0:00:00.500", "Second chapter"},
+		{"chapters_subs.m4a", "Chapters (track 4)", "0:00:00.500", "Second chapter"},
 		{"chapters_subs.m4a", "Track 1: audio", "codec", "mp4a.40.2"},
 		{"chapters_subs.m4a", "Track 1: audio", "audio", "AAC LC, 48000 Hz, 1 channel"},
 		{"chapters_subs.m4a", "Track 1: audio", "samples", "48, 46.9974 per second, all sync"},
 		{"chapters_subs.m4a", "Track 1: audio", "edit list", "from media time 1024 (21.333ms) for 1s"},
 		{"chapters_subs.m4a", "Track 2: subtitles", "font", "Arial"},
-		{"chapters_subs.m4a", "Track 3: text", "chapters", "chapter titles of tracks 1, 2"},
+		{"chapters_subs.m4a", "Track 4: text", "chapters", "chapter titles of tracks 1, 2"},
+		{"chapters_subs.m4a", "Metadata", "Cover Art", "PNG image, 531 bytes"},
 		{"init_cenc.cmfv", "File", "structure", "init segment of a fragmented file, with no fragments"},
 		{"init_cenc.cmfv", "Track 1: video", "codec", "avc3.64001E"},
 		{"init_cenc.cmfv", "Track 1: video", "encryption",
@@ -110,4 +111,26 @@ func TestClockAndSampleText(t *testing.T) {
 	if got := sampleText([]byte{0, 6, 0xfe, 0xff, 0, 'h', 0, 'i'}); got != "hi" {
 		t.Errorf("UTF-16 text: %q", got)
 	}
+}
+
+func TestImages(t *testing.T) {
+	data, err := os.ReadFile("../../testdata/chapters_subs.m4a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := summaryOf(t, "chapters_subs.m4a")
+	for _, sec := range s.Sections {
+		for _, r := range sec.Rows {
+			if r.Name != "Cover Art" {
+				continue
+			}
+			img := r.Image
+			if img == nil || img.Type != "image/png" || img.Size != 531 ||
+				!bytes.HasPrefix(data[img.Pos:img.Pos+img.Size], []byte("\x89PNG")) {
+				t.Errorf("cover art image: %+v", img)
+			}
+			return
+		}
+	}
+	t.Error("no cover art")
 }

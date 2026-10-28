@@ -89,7 +89,7 @@ func Box(data []byte, pos uint64, skip []Range, maxFields int) *Result {
 		case *mp4.UnknownBox:
 			for i := range res.Fields {
 				if res.Fields[i].Name == "" && res.Fields[i].Kind == "bytes" {
-					res.Fields[i].Name = "payload (not decoded)"
+					res.Fields[i].Name = unknownPayload
 				}
 			}
 		}
@@ -144,6 +144,9 @@ func AddDuration(fields []Field, name string, timescale uint64) {
 	}
 }
 
+// unknownPayload is the name of the payload of a box that mp4ff does not decode.
+const unknownPayload = "payload (not decoded)"
+
 // recorder is a bits.SliceReader that records the reads.
 type recorder struct {
 	*bits.FixedSliceReader
@@ -176,6 +179,9 @@ func (r *recorder) add(method, kind string, start int, value func() string) {
 			if n.quickTime {
 				f.QuickTime = quickTimeField
 			}
+		}
+		if f.Name == "" && kind == "bytes" && strings.HasPrefix(key, "mp4/unknown.go:") {
+			f.Name = unknownPayload // the payload of an UnknownBox, also inside a container
 		}
 	}
 	r.fields = append(r.fields, f)

@@ -35,7 +35,25 @@ type Row struct {
 	Value string `json:"value"`
 	// Key is the key of the box that the value comes from, or empty.
 	Key string `json:"key,omitempty"`
+	// Image is where the image is in the file, for a value that is an image, such as cover art, or nil.
+	Image *Image `json:"image,omitempty"`
 }
+
+// Image is an image in the file.
+type Image struct {
+	// Pos is the position of the image in the file, and Size its number of bytes.
+	Pos  uint64 `json:"pos"`
+	Size uint64 `json:"size"`
+	// Type is the media type of the image, such as image/jpeg.
+	Type string `json:"type"`
+}
+
+// imageTypes are the media types of the images of the well-known types of a data box.
+var imageTypes = map[int]string{13: "image/jpeg", 14: "image/png", 27: "image/bmp"}
+
+// imageEntries are the media types of the samples of sample entries whose samples are images, as those of a
+// chapter track with chapter images.
+var imageEntries = map[string]string{"jpeg": "image/jpeg", "mjpg": "image/jpeg", "png ": "image/png"}
 
 // maxValue is the number of characters of a value that a summary keeps.
 const maxValue = 300
@@ -91,13 +109,19 @@ func Of(t *boxview.Tree, r io.ReaderAt) *Summary {
 		s.Sections = append(s.Sections, trackSection(trak, moov, chapterOf, frags))
 	}
 	for _, trak := range traks {
-		if tkhd := boxOf[*mp4.TkhdBox](child(trak, "tkhd")); tkhd != nil && len(chapterOf[tkhd.TrackID]) > 0 &&
-			isTextTrack(trak) {
-			sec := Section{Title: fmt.Sprintf("Chapters (track %d)", tkhd.TrackID), Key: trak.Key}
+		tkhd := boxOf[*mp4.TkhdBox](child(trak, "tkhd"))
+		if tkhd == nil || len(chapterOf[tkhd.TrackID]) == 0 {
+			continue
+		}
+		sec := Section{Title: fmt.Sprintf("Chapters (track %d)", tkhd.TrackID), Key: trak.Key}
+		if isTextTrack(trak) {
 			sec.Rows = trackChapters(trak, r)
-			if len(sec.Rows) > 0 {
-				s.Sections = append(s.Sections, sec)
-			}
+		} else {
+			sec.Title = fmt.Sprintf("Chapter images (track %d)", tkhd.TrackID)
+			sec.Rows = chapterImages(trak)
+		}
+		if len(sec.Rows) > 0 {
+			s.Sections = append(s.Sections, sec)
 		}
 	}
 	return s
@@ -252,6 +276,7 @@ func addItem(s *Section, item *boxview.Node, keys *mp4.KeysBox) {
 	}
 	freeform, domain := "", ""
 	var values []string
+	var images []Row
 	for _, c := range item.Children {
 		switch b := c.Box.(type) {
 		case *mp4.MeanBox:
@@ -259,7 +284,14 @@ func addItem(s *Section, item *boxview.Node, keys *mp4.KeysBox) {
 		case *mp4.NameBox:
 			freeform = b.Name
 		case *mp4.DataBox:
-			values = append(values, dataValue(item.Type, freeform, b))
+			v := dataValue(item.Type, freeform, b)
+			if mime := imageTypes[int(b.DataType&0xffffff)]; mime != "" {
+				// The value of a data box comes after its header, type indicator and locale.
+				images = append(images, Row{Value: v, Key: c.Key,
+					Image: &Image{Pos: c.Pos + uint64(c.HdrLen) + 8, Size: uint64(len(b.Data)), Type: mime}})
+				continue
+			}
+			values = append(values, v)
 		}
 	}
 	if freeform != "" {
@@ -269,6 +301,13 @@ func addItem(s *Section, item *boxview.Node, keys *mp4.KeysBox) {
 		}
 	}
 	s.add(name, strings.Join(values, "; "), item)
+	for i, img := range images {
+		img.Name = name
+		if len(images) > 1 {
+			img.Name = fmt.Sprintf("%s %d", name, i+1)
+		}
+		s.Rows = append(s.Rows, img)
+	}
 }
 
 // dataValue returns the value of a data box of a metadata item of type item, or of name freeform for a freeform
@@ -340,8 +379,14 @@ func chapterTracks(traks []*boxview.Node) map[uint32][]uint32 {
 	return chapterOf
 }
 
-// trackChapters returns the start times and titles of the samples of a chapter track, read from r.
-func trackChapters(trak *boxview.Node, r io.ReaderAt) []Row {
+// trackSample is a sample of a track: its start time, and where it is in the file.
+type trackSample struct {
+	start     time.Duration
+	pos, size uint64
+}
+
+// trackSamples returns the first maxChapters samples of the track of trak, from its sample table.
+func trackSamples(trak *boxview.Node) []trackSample {
 	mdia := child(trak, "mdia")
 	mdhd := boxOf[*mp4.MdhdBox](child(mdia, "mdhd"))
 	stbl := child(child(mdia, "minf"), "stbl")
@@ -349,10 +394,10 @@ func trackChapters(trak *boxview.Node, r io.ReaderAt) []Row {
 	stsc := boxOf[*mp4.StscBox](child(stbl, "stsc"))
 	stts := boxOf[*mp4.SttsBox](child(stbl, "stts"))
 	offset := chunkOffsets(stbl)
-	if mdhd == nil || mdhd.Timescale == 0 || stsz == nil || stsc == nil || stts == nil || offset == nil || r == nil {
+	if mdhd == nil || mdhd.Timescale == 0 || stsz == nil || stsc == nil || stts == nil || offset == nil {
 		return nil
 	}
-	var rows []Row
+	var out []trackSample
 	for nr := 1; nr <= int(min(stsz.GetNrSamples(), maxChapters)); nr++ {
 		chunk, first, err := stsc.ChunkNrFromSampleNr(nr)
 		if err != nil {
@@ -365,16 +410,45 @@ func trackChapters(trak *boxview.Node, r io.ReaderAt) []Row {
 		for i := first; i < nr; i++ {
 			pos += uint64(stsz.GetSampleSize(i))
 		}
-		buf := make([]byte, min(stsz.GetSampleSize(nr), maxChapterSample))
-		if _, err := r.ReadAt(buf, int64(pos)); err != nil {
-			break
-		}
 		start, _, err := stts.GetDecodeTime(uint32(nr))
 		if err != nil {
 			break
 		}
-		rows = append(rows, Row{Name: clock(time.Duration(float64(start) / float64(mdhd.Timescale) *
-			float64(time.Second))), Value: sampleText(buf), Key: trak.Key})
+		out = append(out, trackSample{start: seconds(start, mdhd.Timescale), pos: pos,
+			size: uint64(stsz.GetSampleSize(nr))})
+	}
+	return out
+}
+
+// trackChapters returns the start times and titles of the samples of a chapter track, read from r.
+func trackChapters(trak *boxview.Node, r io.ReaderAt) []Row {
+	if r == nil {
+		return nil
+	}
+	var rows []Row
+	for _, smp := range trackSamples(trak) {
+		buf := make([]byte, min(smp.size, maxChapterSample))
+		if _, err := r.ReadAt(buf, int64(smp.pos)); err != nil {
+			break
+		}
+		rows = append(rows, Row{Name: clock(smp.start), Value: sampleText(buf), Key: trak.Key})
+	}
+	return rows
+}
+
+// chapterImages returns the start times and images of the samples of a chapter track whose samples are images,
+// such as the JPEG images of the chapters of a podcast, or nil if its samples are not images.
+func chapterImages(trak *boxview.Node) []Row {
+	entries := kids(child(child(child(child(trak, "mdia"), "minf"), "stbl"), "stsd"))
+	if len(entries) == 0 || imageEntries[entries[0].Type] == "" {
+		return nil
+	}
+	mime := imageEntries[entries[0].Type]
+	var rows []Row
+	for _, smp := range trackSamples(trak) {
+		rows = append(rows, Row{Name: clock(smp.start), Key: trak.Key,
+			Value: fmt.Sprintf("%s image, %d bytes", strings.ToUpper(strings.TrimPrefix(mime, "image/")), smp.size),
+			Image: &Image{Pos: smp.pos, Size: smp.size, Type: mime}})
 	}
 	return rows
 }

@@ -88,6 +88,8 @@ The summary has a section for the file, the movie, the metadata, the chapters an
 
 On the web page, a file without errors opens with the summary, and the names of values that come from a box
 select that box. The file name above the summary, the File summary button and the `s` key bring it back.
+Images in the file are shown: the cover art in `covr` and the images of chapter image tracks in the summary, and
+the image of a selected `data` box in the box pane. A click opens an image on its own.
 
 ## Fields, layout and parts
 
@@ -173,7 +175,7 @@ mp4lens needs the `boxtree` package of mp4ff, which is not yet in a released mp4
 
 The example files in `testdata` come from the mp4ff test data, except the `qt_*.mov` files, which are made with
 ffmpeg from its test sources, and `chapters_subs.m4a`, which ffmpeg makes from the audio of `qt_h264_aac.mov`
-with two chapters, two subtitles and a title and track number.
+with two chapters, two subtitles, a title and track number, and a 64x64 cover image from its test pattern.
 
 `MP4LENS_CORPUS=files.txt go test -count=1 ./internal/boxview -run TestCorpus -v` decodes the files listed in
 `files.txt`, finds the layout of every box, and reports panics and how many layout bytes have names.

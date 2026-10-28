@@ -217,6 +217,9 @@ h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.07em; text-transform: u
 .overview h3 button:hover, .overview h3 button:focus-visible, .overview .k button:hover,
 .overview .k button:focus-visible { color: var(--ink); text-decoration: underline; }
 .overview .fields { grid-template-columns: minmax(120px, max-content) 1fr; }
+.thumb { display: block; max-width: 160px; max-height: 120px; margin-top: 6px; border: 1px solid var(--line); border-radius: 4px; }
+.preview { display: block; max-width: 100%; max-height: 420px; border: 1px solid var(--line); border-radius: 4px; }
+.imgnote { font-size: 12px; color: var(--muted); margin-top: 6px; }
 h3 small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
 .layoutwrap { overflow: auto; max-height: 360px; border: 1px solid var(--line); border-radius: 6px; }
 .layout { border-collapse: collapse; font-family: var(--font-mono); font-size: 12px; width: 100%; font-variant-numeric: tabular-nums; }
@@ -441,6 +444,7 @@ const state = {
   onlyMatches: false,
   layout: null,      // { key, fields, capped, error } of the selected box
   overview: null,    // { id, data } with the summary of the file, which shows when no box is selected
+  imageURLs: [],     // the object URLs of the images in the box pane, revoked when it changes
   layoutLimit: 500,
 };
 
@@ -907,6 +911,7 @@ function renderDetail() {
   const long = n.part ? n.name : n.hdrLen === 0 ? "Bytes without a box header" : (n.name ? n.name + " box" : "");
   const boxKids = n.children.filter((c) => !c.part), partKids = n.children.length - boxKids.length;
   const hasVF = n.version !== undefined;
+  const img = imageOf(n);
   const fileEnd = state.tree.size;
   const end = n.pos + n.size;
   const facts = [
@@ -936,6 +941,7 @@ function renderDetail() {
     `<dl class="facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>` +
     alerts +
     (n.fields.length ? `<section><h3>Fields</h3><div id="fieldsBox">${renderFields(n)}</div></section>` : "") +
+    (img ? `<section><h3>Image</h3>${imageHtml(img.pos, img.size, img.mime, "preview")}</section>` : "") +
     (n.part || !n.hdrLen || n.container ? "" : `<section id="layoutBox"></section>`) +
     `<section><h3>Bytes</h3><div class="hexwrap"><div class="hex" id="hex">Reading…</div></div>` +
     `<div class="hexbar"><div class="legend">` +
@@ -945,10 +951,42 @@ function renderDetail() {
     (boxKids.length ? `<span><i class="b-chdr"></i>child box header</span><span><i class="b-c1"></i>child box</span>` : "") +
     (hitsIn(n.pos, end).length ? `<span><i class="b-hit"></i>search hit</span>` : "") +
     `</div><span id="hexHover"></span><span id="hexMore"></span></div></section>`;
+  fillImages();
   renderHex(n);
   renderLayout(n);
   loadLayout(n);
 }
+// maxImage is the largest image, in bytes, that the box pane shows.
+const maxImage = 32 << 20;
+// imageHtml returns an image of the bytes from pos, of size bytes and media type mime, in the file, as a link to
+// the image on its own. The image is read when imageURLs fills it in.
+function imageHtml(pos, size, mime, cls) {
+  if (size <= 0 || size > maxImage || pos + size > state.tree.size) return `<div class="imgnote">The image is not shown, at ${fmtInt(size)} bytes.</div>`;
+  return `<a data-img="${pos},${size},${esc(mime)}" target="_blank" rel="noopener"><img class="${cls}" alt="${esc(mime)} image of ${fmtInt(size)} bytes"></a>`;
+}
+// fillImages sets the sources of the images that imageHtml made in the box pane, as object URLs of slices of the
+// file, and revokes those of the previous content.
+function fillImages() {
+  for (const u of state.imageURLs) URL.revokeObjectURL(u);
+  state.imageURLs = [];
+  for (const a of $("detail").querySelectorAll("a[data-img]")) {
+    const [pos, size, mime] = a.dataset.img.split(",");
+    const url = URL.createObjectURL(state.file.blob.slice(Number(pos), Number(pos) + Number(size), mime));
+    state.imageURLs.push(url);
+    a.href = url;
+    a.querySelector("img").src = url;
+  }
+}
+// imageOf returns the image in the value of a data box n of a metadata item, as { pos, size, mime }, or null.
+function imageOf(n) {
+  if (n.type !== "data" || !n.hdrLen) return null;
+  const f = n.fields.find((x) => x.key === "dataType");
+  const mime = f && { 13: "image/jpeg", 14: "image/png", 27: "image/bmp" }[parseInt(f.value, 10)];
+  if (!mime) return null;
+  const pos = n.pos + n.hdrLen + 8; // after the header, the type indicator and the locale
+  return { pos, size: n.pos + n.size - pos, mime };
+}
+
 // renderOverview shows the summary of the file, which it asks the decoder for the first time.
 async function renderOverview() {
   const d = $("detail");
@@ -972,8 +1010,10 @@ async function renderOverview() {
   const link = (key, text) => key ? `<button type="button" data-key="${esc(key)}">${esc(text)}</button>` : esc(text);
   d.innerHTML = crumbs + `<div class="head"><h2>File summary</h2></div>` + (ov.sections || []).map((sec) =>
     `<section class="overview"><h3>${link(sec.key, sec.title)}</h3><div class="fields">` +
-    (sec.rows || []).map((r) => `<div class="k">${link(r.key, r.name)}</div><div class="v">${esc(r.value)}</div>`).join("") +
+    (sec.rows || []).map((r) => `<div class="k">${link(r.key, r.name)}</div><div class="v">${esc(r.value)}` +
+      (r.image ? imageHtml(r.image.pos, r.image.size, r.image.type, "thumb") : "") + `</div>`).join("") +
     `</div></section>`).join("");
+  fillImages();
 }
 $("detail").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-key]");
