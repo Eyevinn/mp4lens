@@ -148,7 +148,8 @@ mp4lens needs the `boxtree` package of mp4ff, which is not yet in a released mp4
 `go.mod` replaces mp4ff with a local checkout in `../mp4ff-boxtree` that has the package.
 
 The example files in `testdata` come from the mp4ff test data, except the `qt_*.mov` files, which are made with
-ffmpeg from its test sources.
+ffmpeg from its test sources, and `chapters_subs.m4a`, which ffmpeg makes from the audio of `qt_h264_aac.mov`
+with two chapters, two subtitles and a title and track number.
 
 `MP4LENS_CORPUS=files.txt go test -count=1 ./internal/boxview -run TestCorpus -v` decodes the files listed in
 `files.txt`, finds the layout of every box, and reports panics and how many layout bytes have names.

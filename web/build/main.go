@@ -61,6 +61,7 @@ var exampleFiles = []exampleFile{
 	{"hevc", "HEVC init segment with an SEI message in hvcC", "hvc1_init.mp4", "hvc1_init.mp4", nil},
 	{"mov", "QuickTime movie with AAC audio", "qt_h264_aac.mov", "qt_h264_aac.mov", nil},
 	{"mov-pcm", "QuickTime movie with 5.1 PCM audio", "qt_h264_lpcm.mov", "qt_h264_lpcm.mov", nil},
+	{"chapters", "Audio with chapters, subtitles and iTunes metadata", "chapters_subs.m4a", "chapters_subs.m4a", nil},
 	{"truncated", "Truncated init segment", "init_truncated.mp4", "init_truncated.mp4", nil},
 }
 

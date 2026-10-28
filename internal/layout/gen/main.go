@@ -105,7 +105,8 @@ func parseDir(dir string) (map[string]entry, error) {
 	return entries, err
 }
 
-// addFile adds the reads in f. A read gets the name of what it is assigned to, or the comment on its line.
+// addFile adds the reads in f. A read gets the name of what it is assigned to, or the comment on its line, and
+// skipped bytes without a comment are reserved.
 // A line with more than one read gets no name, since the reads cannot be told apart at run time.
 func addFile(fset *token.FileSet, f *ast.File, file string, entries map[string]entry) {
 	comments := map[int]string{}
@@ -138,6 +139,9 @@ func addFile(fset *token.FileSet, f *ast.File, file string, entries map[string]e
 		if name == "" {
 			name = comments[line]
 		}
+		if name == "" && sel.Sel.Name == "SkipBytes" {
+			name = "reserved"
+		}
 		e := entry{method: sel.Sel.Name, name: name, quickTime: qt || strings.Contains(name, "QuickTime")}
 		if perLine[key] > 1 {
 			e = entry{method: "", name: ""}
@@ -147,12 +151,16 @@ func addFile(fset *token.FileSet, f *ast.File, file string, entries map[string]e
 	})
 }
 
-// target returns the name of what the call at the top of stack is assigned to, and whether it is in a
-// QuickTime structure.
+// target returns the name of what the call at the top of stack is assigned to, or copied to, and whether it is
+// in a QuickTime structure of a box, such as the QuickTime sound description of an audio sample entry.
 func target(stack []ast.Node) (string, bool) {
 	call := stack[len(stack)-1]
 	for i := len(stack) - 2; i >= 0; i-- {
 		switch s := stack[i].(type) {
+		case *ast.CallExpr:
+			if id, ok := s.Fun.(*ast.Ident); ok && id.Name == "copy" && len(s.Args) == 2 && contains(s.Args[1], call) {
+				return fieldName(s.Args[0]), false
+			}
 		case *ast.AssignStmt:
 			idx := 0
 			if len(s.Lhs) == len(s.Rhs) {
@@ -181,7 +189,8 @@ func target(stack []ast.Node) (string, bool) {
 			qt := false
 			if i > 0 {
 				if lit, ok := stack[i-1].(*ast.CompositeLit); ok {
-					qt = strings.Contains(exprString(lit.Type), "QuickTime")
+					t := exprString(lit.Type)
+					qt = strings.Contains(t, "QuickTime") && !strings.HasSuffix(t, "Box")
 				}
 			}
 			return exprString(s.Key), qt
@@ -221,6 +230,8 @@ func exprString(e ast.Expr) string {
 		return exprString(x.X) + "." + x.Sel.Name
 	case *ast.IndexExpr:
 		return exprString(x.X) + "[]"
+	case *ast.SliceExpr:
+		return exprString(x.X)
 	case *ast.StarExpr:
 		return exprString(x.X)
 	case *ast.ParenExpr:

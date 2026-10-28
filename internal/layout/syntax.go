@@ -48,6 +48,7 @@ var (
 	entryCount         = fieldSyntax{"entry_count", "number of entries that follow", nil}
 	dataReferenceIndex = fieldSyntax{"data_reference_index", "data entry in dref of the samples, from 1", nil}
 	trackID            = fieldSyntax{"track_ID", "identifier of the track, unique in the movie", nil}
+	reserved           = fieldSyntax{"reserved", "reserved, 0", nil}
 	sampleFlag         = func(name, about string) fieldSyntax { return fieldSyntax{name, about, showSampleFlags} }
 )
 
@@ -284,9 +285,108 @@ var syntaxes = map[string]boxSyntax{
 		"NumberOfFrames":     {"number of frames", "frames per second, or per counter tick", nil},
 		"Reserved2":          {"reserved", "one byte, or three as in the specification", nil},
 	}},
+	// The key of user data text atoms, such as ©nam in udta or name in a timecode sample entry.
+	"userDataText": {spec: quickTime + ", user data atoms", fields: map[string]fieldSyntax{
+		"size":     {"size", "number of bytes of the text", nil},
+		"language": {"language code", "Macintosh language code, or an ISO 639-2/T code packed as in mdhd", nil},
+		"text":     {"text", "the text", nil},
+	}},
+	"name": {spec: quickTime + ", user data atoms", fields: map[string]fieldSyntax{
+		"Name": {"name", "name of the movie or track", nil},
+	}},
+	"data": {spec: quickTime + ", value atom", fields: map[string]fieldSyntax{
+		"DataType": {"type indicator", "type of the value, such as 0 implicit, 1 UTF-8, 13 JPEG or 21 signed integer",
+			showDataType},
+		"Country":  {"country", "country of the locale, or 0 for all", nil},
+		"Language": {"language", "language of the locale, or 0 for all", nil},
+		"Data":     {"value", "the value of the metadata item", nil},
+	}},
+	"qttext": {spec: quickTime + ", text sample description", fields: map[string]fieldSyntax{
+		"reserved":           {"reserved", "reserved, 0", nil},
+		"DataReferenceIndex": {"data reference index", "data entry in dref of the samples, from 1", nil},
+		"DisplayFlags": {"display flags", "don't auto scale 0x2, use movie background color 0x8, scroll in 0x20, " +
+			"scroll out 0x40, horizontal scroll 0x80, reverse scroll 0x100, continuous scroll 0x200, drop shadow " +
+			"0x1000, anti-alias 0x2000, key text 0x4000", nil},
+		"TextJustification": {"text justification", "0 left, 1 centered, -1 right", nil},
+		"BackgroundColor[]": {"background color", "red, green and blue of the background", nil},
+		"Top":               {"default text box", "top of the area of the text", nil},
+		"Left":              {"default text box", "left of the area of the text", nil},
+		"Bottom":            {"default text box", "bottom of the area of the text", nil},
+		"Right":             {"default text box", "right of the area of the text", nil},
+		"StyleStart": {"reserved", "first character of the default style, as in the text description of the " +
+			"QuickTime API", nil},
+		"LineHeight": {"reserved", "line height of the default style, as QuickTime writes it", nil},
+		"Ascent":     {"reserved", "ascent of the default style, as QuickTime writes it", nil},
+		"FontNumber": {"font number", "font of the text", nil},
+		"FontFace":   {"font face", "style bits: bold, italic, underline, outline, shadow, condense, extend", nil},
+		"Reserved":   {"reserved", "the byte after the font face", nil},
+		"FontSize": {"reserved", "point size of the default style, as QuickTime writes it; the field list of the " +
+			"specification is one byte longer", nil},
+		"ForegroundColor[]": {"foreground color", "red, green and blue of the text", nil},
+		"n":                 {"text name length", "length of the Pascal string that follows", nil},
+		"FontName":          {"text name", "name of the font of the text", nil},
+	}},
+	// 3GPP timed text, which chapter tracks use, also with the QuickTime sample entry type text.
+	"tx3g": {spec: threeGPPText + " 5.16", fields: map[string]fieldSyntax{
+		"reserved":           {"reserved", "reserved, 0", nil},
+		"DataReferenceIndex": dataReferenceIndex,
+		"DisplayFlags": {"displayFlags", "scroll in 0x20, scroll out 0x40, scroll direction 0x180, continuous " +
+			"karaoke 0x800, vertical text 0x20000, fill text region 0x40000", nil},
+		"HorizontalJustification": {"horizontal-justification", "0 left, 1 centered, -1 right", showInt8},
+		"VerticalJustification":   {"vertical-justification", "0 top, 1 centered, -1 bottom", showInt8},
+		"BackgroundColorRGBA":     {"background-color-rgba", "red, green, blue and alpha of the background", nil},
+		"Top":                     {"default-text-box.top", "top of the default text box, relative to the track", nil},
+		"Left":                    {"default-text-box.left", "left of the default text box", nil},
+		"Bottom":                  {"default-text-box.bottom", "bottom of the default text box", nil},
+		"Right":                   {"default-text-box.right", "right of the default text box", nil},
+		"StartChar":               {"default-style.startChar", "first character of the style, 0 in a sample entry", nil},
+		"EndChar":                 {"default-style.endChar", "character after the style, 0 in a sample entry", nil},
+		"FontID":                  {"default-style.font-ID", "default font, an entry of the font table", nil},
+		"FaceStyleFlags":          {"default-style.face-style-flags", "bold 1, italic 2, underline 4", nil},
+		"FontSize":                {"default-style.font-size", "font size in pixels", nil},
+		"TextColorRGBA":           {"default-style.text-color-rgba", "red, green, blue and alpha of the text", nil},
+	}},
+	"ftab": {spec: threeGPPText + " 5.16", fields: map[string]fieldSyntax{
+		"count": {"entry-count", "number of fonts that follow", nil},
+		"id":    {"font-ID", "identifier of the font, which style records refer to", nil},
+		"n":     {"font-name-length", "length of the font name that follows", nil},
+		"Name":  {"font", "font names in order of preference; Serif, Sans-serif and Monospace are generic", nil},
+	}},
+	// iTunes metadata: the mean and name of a freeform item ----.
+	"mean": {spec: iTunesFreeform, fields: map[string]fieldSyntax{
+		"Domain": {"mean", "domain of the name of the item, in reverse DNS notation, such as com.apple.iTunes", nil},
+	}},
+	"itemName": {spec: iTunesFreeform, fields: map[string]fieldSyntax{
+		"version and flags": {"version and flags", "version and flags, 0", nil},
+		"Name":              {"name", "name of the item in its domain, such as iTunSMPB", nil},
+	}},
 }
 
-const quickTime = "QuickTime File Format"
+const (
+	quickTime      = "QuickTime File Format"
+	threeGPPText   = "3GPP TS 26.245"
+	iTunesFreeform = "iTunes metadata, freeform item ----"
+)
+
+// dataTypes are the names of the well-known types of the value atom data.
+var dataTypes = map[uint64]string{
+	0: "implicit", 1: "UTF-8", 2: "UTF-16", 4: "UTF-8 sort", 5: "UTF-16 sort", 13: "JPEG", 14: "PNG",
+	21: "signed integer", 22: "unsigned integer", 23: "32-bit float", 24: "64-bit float", 27: "BMP",
+	28: "QuickTime metadata atom",
+}
+
+// showInt8 writes a signed 8-bit value that was read as unsigned, if it is negative.
+func showInt8(v uint64) string {
+	if v < 0x80 || v > 0xff {
+		return ""
+	}
+	return strconv.Itoa(int(int8(v)))
+}
+
+// showDataType writes the name of the well-known type of a value atom.
+func showDataType(v uint64) string {
+	return dataTypes[v]
+}
 
 var brandFields = map[string]fieldSyntax{
 	"major_brand":       {"major_brand", "brand of the specification that the file conforms to best", nil},
@@ -326,6 +426,8 @@ func addSyntax(boxType string, pos uint64, fields []Field) ([]Field, string) {
 			base, index := splitIndex(f.Name)
 			if fs, ok := syn.fields[base]; ok {
 				setSyntax(&f, fs, index)
+			} else if base == "reserved" {
+				setSyntax(&f, reserved, index)
 			}
 		}
 		out = append(out, f)

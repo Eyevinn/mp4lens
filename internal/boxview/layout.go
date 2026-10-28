@@ -3,6 +3,7 @@ package boxview
 import (
 	"io"
 
+	"github.com/Eyevinn/mp4ff/mp4"
 	"github.com/Eyevinn/mp4lens/internal/layout"
 )
 
@@ -37,5 +38,22 @@ func (t *Tree) Layout(n *Node, r io.ReaderAt) *layout.Result {
 			skip = append(skip, layout.Range{Start: c.Pos, End: c.End()})
 		}
 	}
-	return layout.Box(data, n.Pos, skip, MaxLayoutFields)
+	res := layout.Box(data, n.Pos, skip, MaxLayoutFields)
+	if item := n.Parent; n.Type == "data" && item != nil && item.Parent != nil && item.Parent.Type == "ilst" {
+		layout.ItemData(item.Type, freeformName(item), res.Fields, data, n.Pos)
+	}
+	return res
+}
+
+// freeformName returns the name of a freeform metadata item ----, such as iTunSMPB, or "".
+func freeformName(item *Node) string {
+	if item.Type != "----" {
+		return ""
+	}
+	for _, c := range item.Children {
+		if name, ok := c.Box.(*mp4.NameBox); ok {
+			return name.Name
+		}
+	}
+	return ""
 }

@@ -3,6 +3,7 @@ package layout
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"os"
 	"strings"
 	"testing"
@@ -47,7 +48,7 @@ func TestTkhd(t *testing.T) {
 		t.Fatalf("err=%v capped=%t", res.Err, res.Capped)
 	}
 	want := "size,boxType,version,flags,CreationTime,ModificationTime,TrackID,ReservedAfterTrackID,Duration," +
-		"Reserved 8 x 0,Layer,AlternateGroup,Volume,,Matrix[0],Matrix[1],Matrix[2],Matrix[3],Matrix[4],Matrix[5]," +
+		"Reserved 8 x 0,Layer,AlternateGroup,Volume,reserved,Matrix[0],Matrix[1],Matrix[2],Matrix[3],Matrix[4],Matrix[5]," +
 		"Matrix[6],Matrix[7],Matrix[8],Width,Height"
 	if got := names(res.Fields); got != want {
 		t.Errorf("names:\n got %s\nwant %s", got, want)
@@ -296,4 +297,25 @@ func TestSidxSyntax(t *testing.T) {
 		t.Errorf("sap[1]: %+v", f)
 	}
 	spec(t, res, "subsegment_duration[1]")
+}
+
+func TestQuickTimeTextEntry(t *testing.T) {
+	// The text sample entry of a QuickTime text track, with the layout of the QuickTime text description.
+	data, err := hex.DecodeString("0000003b746578740000000000000001000000000000000100000000000000000000006200a0" +
+		"000000000010000e00010000000cffffffffffff00")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := Box(data, 0, nil, 100)
+	if res.Err != nil || res.Spec != "QuickTime File Format, text sample description" {
+		t.Fatalf("spec %q, err %v", res.Spec, res.Err)
+	}
+	for _, f := range res.Fields {
+		if f.Name == "" || f.Spec == "" || f.QuickTime != "" {
+			t.Errorf("field %+v", f)
+		}
+	}
+	if f := res.Fields[13]; f.Name != "StyleStart" || f.Spec != "reserved" {
+		t.Errorf("field 13 is %s, spec %s", f.Name, f.Spec)
+	}
 }

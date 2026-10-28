@@ -17,7 +17,6 @@ var quickTimeBoxes = map[string]string{
 	"tmcd":             "QuickTime timecode",
 	"gmhd":             "QuickTime base media information header",
 	"gmin":             "QuickTime base media information",
-	"text":             "QuickTime text sample entry",
 	"tapt":             "QuickTime track aperture mode dimensions",
 	"clef":             "QuickTime clean aperture dimensions",
 	"prof":             "QuickTime production aperture dimensions",
@@ -63,6 +62,26 @@ func boxQuickTime(n *Node) string {
 		return "QuickTime user data text atom; ISOBMFF files keep such metadata in meta/ilst"
 	}
 	switch b := n.Box.(type) {
+	case *mp4.QuickTimeTextSampleEntryBox:
+		return "QuickTime text sample entry"
+	case *mp4.TextSampleEntryBox:
+		if b.Type() == "text" {
+			return "QuickTime text sample entry type with the 3GPP timed text layout of tx3g, as ffmpeg writes it " +
+				"for chapter tracks"
+		}
+	case *mp4.UnknownBox:
+		if n.Type == "text" && n.Parent != nil && n.Parent.Type == "gmhd" {
+			return "Undocumented QuickTime atom of text tracks, which Apple players require for chapters; ffmpeg " +
+				"writes its bytes, an identity matrix, verbatim"
+		}
+	case *mp4.NameBox:
+		if !b.FullBox {
+			return "QuickTime user data name of the movie or track"
+		}
+	case *mp4.UserDataTextBox:
+		if n.Type == "name" {
+			return "QuickTime name of the source tape of the timecode, as a user data text"
+		}
 	case *mp4.FtypBox:
 		if b.MajorBrand() == "qt  " {
 			return "QuickTime brand qt as major brand"
