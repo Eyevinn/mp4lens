@@ -45,9 +45,10 @@ var (
 	modificationTime = fieldSyntax{"modification_time", "last modification time, in seconds since 1904-01-01 UTC", showMacTime}
 	matrix           = fieldSyntax{"matrix", "transformation matrix of the video, a b u c d v x y w, with u, v and w " +
 		"in 2.30 and the others in 16.16 fixed point", nil}
-	entryCount = fieldSyntax{"entry_count", "number of entries that follow", nil}
-	trackID    = fieldSyntax{"track_ID", "identifier of the track, unique in the movie", nil}
-	sampleFlag = func(name, about string) fieldSyntax { return fieldSyntax{name, about, showSampleFlags} }
+	entryCount         = fieldSyntax{"entry_count", "number of entries that follow", nil}
+	dataReferenceIndex = fieldSyntax{"data_reference_index", "data entry in dref of the samples, from 1", nil}
+	trackID            = fieldSyntax{"track_ID", "identifier of the track, unique in the movie", nil}
+	sampleFlag         = func(name, about string) fieldSyntax { return fieldSyntax{name, about, showSampleFlags} }
 )
 
 var syntaxes = map[string]boxSyntax{
@@ -78,8 +79,8 @@ var syntaxes = map[string]boxSyntax{
 			"AlternateGroup":       {"alternate_group", "group of tracks that are alternatives to each other, or 0", nil},
 			"Volume":               {"volume", "volume of an audio track, in 8.8 fixed point", showFixed8_8},
 			"Matrix[]":             matrix,
-			"Width":                {"width", "width of the presentation, in 16.16 fixed point", showFixed16_16},
-			"Height":               {"height", "height of the presentation, in 16.16 fixed point", showFixed16_16},
+			"Width":                {"width", "width of the presentation, in 16.16 fixed point", showUFixed16_16},
+			"Height":               {"height", "height of the presentation, in 16.16 fixed point", showUFixed16_16},
 		}},
 	"mdhd": {spec: isobmff + " 8.4.2", fields: map[string]fieldSyntax{
 		"CreationTime": creationTime, "ModificationTime": modificationTime,
@@ -194,6 +195,51 @@ var syntaxes = map[string]boxSyntax{
 		"refCount":                 {"reference_count", "number of references that follow", nil},
 		"SubSegmentDuration":       {"subsegment_duration", "duration of the subsegment, in the time scale of the box", nil},
 	}},
+	// Sample entries, by kind, since they have many types.
+	"visual": {spec: isobmff + " 12.1.3", fields: map[string]fieldSyntax{
+		"Skip 6 reserved bytes":    {"reserved", "reserved, 0", nil},
+		"DataReferenceIndex":       dataReferenceIndex,
+		"QuickTimeVersion":         {"pre_defined", "0 in ISOBMFF; the sample description version in QuickTime", nil},
+		"QuickTimeRevisionLevel":   {"reserved", "0 in ISOBMFF; the revision level in QuickTime", nil},
+		"QuickTimeVendor":          {"pre_defined[1]", "0 in ISOBMFF; the vendor of the compressor in QuickTime, such as appl", showFourCC},
+		"QuickTimeTemporalQuality": {"pre_defined[2]", "0 in ISOBMFF; the temporal quality in QuickTime, 0 to 1023", showQuality},
+		"QuickTimeSpatialQuality":  {"pre_defined[3]", "0 in ISOBMFF; the spatial quality in QuickTime, 0 to 1024", showQuality},
+		"Width":                    {"width", "width of the coded picture in pixels", nil},
+		"Height":                   {"height", "height of the coded picture in pixels", nil},
+		"Horizresolution":          {"horizresolution", "horizontal pixels per inch, in 16.16 fixed point, 72", showUFixed16_16},
+		"Vertresolution":           {"vertresolution", "vertical pixels per inch, in 16.16 fixed point, 72", showUFixed16_16},
+		"reserved":                 {"reserved", "reserved, 0", nil},
+		"FrameCount":               {"frame_count", "number of frames in each sample, 1", nil},
+		"compressorNameLength":     {"compressorname", "first byte of compressorname: the length of the name", nil},
+		"CompressorName":           {"compressorname", "name of the compressor, in the 31 bytes after the length", nil},
+		"":                         {"compressorname", "the bytes of compressorname after the name", nil},
+		"Depth":                    {"depth", "color depth: 24 for color without alpha", nil},
+		"ColorTableID":             {"pre_defined", "-1 in ISOBMFF; the color table ID in QuickTime, -1 for none", nil},
+	}},
+	"audio": {spec: isobmff + " 12.2.3", fields: map[string]fieldSyntax{
+		"reserved":                      {"reserved", "reserved, 0", nil},
+		"DataReferenceIndex":            dataReferenceIndex,
+		"QuickTimeVersion":              {"reserved", "0 in ISOBMFF; the sound description version in QuickTime", nil},
+		"QuickTimeRevisionLevel":        {"reserved", "0 in ISOBMFF; the revision level in QuickTime", nil},
+		"QuickTimeVendor":               {"reserved", "0 in ISOBMFF; the vendor in QuickTime, such as appl", showFourCC},
+		"ChannelCount":                  {"channelcount", "number of channels", nil},
+		"SampleSize":                    {"samplesize", "bits per audio sample, 16", nil},
+		"CompressionID":                 {"pre_defined", "0 in ISOBMFF; the QuickTime compression ID, -2 for a variable rate", nil},
+		"PacketSize":                    {"reserved", "reserved, 0", nil},
+		"SampleRate":                    {"samplerate", "sampling rate in 16.16 fixed point", showUFixed16_16},
+		"SamplesPerPacket":              {"samples per packet", "QuickTime version 1: uncompressed frames per packet", nil},
+		"BytesPerPacket":                {"bytes per packet", "QuickTime version 1: bytes per packet of one channel", nil},
+		"BytesPerFrame":                 {"bytes per frame", "QuickTime version 1: bytes per frame of all channels", nil},
+		"BytesPerSample":                {"bytes per sample", "QuickTime version 1: bytes per uncompressed sample", nil},
+		"SizeOfStructOnly":              {"sizeOfStructOnly", "QuickTime version 2: offset of the first child atom, 72", nil},
+		"AudioSampleRate":               {"audioSampleRate", "QuickTime version 2: sampling rate as a 64-bit float", nil},
+		"NumAudioChannels":              {"numAudioChannels", "QuickTime version 2: number of channels", nil},
+		"Always7F000000":                {"always7F000000", "QuickTime version 2: 0x7f000000", nil},
+		"ConstBitsPerChannel":           {"constBitsPerChannel", "QuickTime version 2: bits per channel of uncompressed audio, or 0", nil},
+		"FormatSpecificFlags":           {"formatSpecificFlags", "QuickTime version 2: format flags, such as float or big-endian", nil},
+		"ConstBytesPerAudioPacket":      {"constBytesPerAudioPacket", "QuickTime version 2: bytes per packet, or 0 if they vary", nil},
+		"ConstLPCMFramesPerAudioPacket": {"constLPCMFramesPerAudioPacket", "QuickTime version 2: frames per packet, or 0", nil},
+	}},
 	// QuickTime File Format atoms.
 	"chan": {spec: quickTime + ", audio channel layout atom", fields: map[string]fieldSyntax{
 		"LayoutTag": {"mChannelLayoutTag", "Core Audio channel layout: the upper 16 bits name the layout, the lower 16 " +
@@ -297,10 +343,14 @@ func setSyntax(f *Field, fs fieldSyntax, index string) {
 	if fs.show == nil {
 		return
 	}
+	text := ""
 	if v, err := strconv.ParseInt(f.Value, 10, 64); err == nil {
-		f.Value += " (" + fs.show(uint64(v)) + ")"
+		text = fs.show(uint64(v))
 	} else if v, err := strconv.ParseUint(f.Value, 10, 64); err == nil {
-		f.Value += " (" + fs.show(v) + ")"
+		text = fs.show(v)
+	}
+	if text != "" {
+		f.Value += " (" + text + ")"
 	}
 }
 
@@ -378,6 +428,11 @@ func showFixed16_16(v uint64) string {
 	return strconv.FormatFloat(float64(int32(uint32(v)))/65536, 'g', -1, 64)
 }
 
+// showUFixed16_16 writes an unsigned 16.16 fixed-point number.
+func showUFixed16_16(v uint64) string {
+	return strconv.FormatFloat(float64(uint32(v))/65536, 'g', -1, 64)
+}
+
 // showFixed8_8 writes an 8.8 fixed-point number.
 func showFixed8_8(v uint64) string {
 	return strconv.FormatFloat(float64(int16(uint16(v)))/256, 'g', -1, 64)
@@ -391,6 +446,33 @@ func showMacTime(v uint64) string {
 		return "not set"
 	}
 	return macEpoch.Add(time.Duration(v) * time.Second).Format(time.RFC3339)
+}
+
+// showFourCC writes a 32-bit value as its four characters, if they are printable ASCII, and nothing for 0.
+func showFourCC(v uint64) string {
+	if v == 0 {
+		return ""
+	}
+	b := []byte{byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v)}
+	for _, c := range b {
+		if c < 0x20 || c > 0x7e {
+			return fmt.Sprintf("%#08x", v)
+		}
+	}
+	return string(b)
+}
+
+// qualityNames are the names of the codec quality levels of QuickTime.
+var qualityNames = map[uint64]string{0x100: "low", 0x200: "normal", 0x300: "high", 0x3ff: "max", 0x400: "lossless"}
+
+func showQuality(v uint64) string {
+	if v == 0 {
+		return ""
+	}
+	if name, ok := qualityNames[v]; ok {
+		return fmt.Sprintf("%#x %s", v, name)
+	}
+	return fmt.Sprintf("%#x", v)
 }
 
 func showLanguage(v uint64) string {

@@ -95,7 +95,14 @@ func Box(data []byte, pos uint64, skip []Range, maxFields int) *Result {
 	}
 	addQuickTimeNotes(box, res.Fields)
 	if len(data) >= 8 {
-		res.Fields, res.Spec = addSyntax(string(data[4:8]), pos, res.Fields)
+		key := string(data[4:8])
+		switch box.(type) {
+		case *mp4.VisualSampleEntryBox:
+			key = "visual"
+		case *mp4.AudioSampleEntryBox:
+			key = "audio"
+		}
+		res.Fields, res.Spec = addSyntax(key, pos, res.Fields)
 	}
 	return res
 }

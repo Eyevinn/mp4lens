@@ -271,7 +271,7 @@ func TestLayoutAndQuickTime(t *testing.T) {
 	m := newModel(t, "qt_h264_aac.mov", nil, Options{Query: "type:mp4a"})
 	s := screen(m) + ansi.Strip(m.detail.GetContent())
 	for _, want := range []string{"QuickTime file", "QuickTime: QuickTime sound description version 1",
-		"Layout  16 fields as mp4ff reads them", "QuickTimeVersion       1  QT",
+		"Layout  16 fields as mp4ff reads them", "samples per packet   1024  QT", "samplerate           3145728000 (48000)",
 		"QT SamplesPerPacket: QuickTime sound description field; not in ISOBMFF", "compression_id        -2  QT"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("screen lacks %q:\n%s", want, s)
