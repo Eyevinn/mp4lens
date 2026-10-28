@@ -1,5 +1,5 @@
 [codespell]
-skip = ./venv,*/venv/*,./web/site,testdata,*/testdata/*,*.mp4,*.m4s,go.sum
+skip = ./.venv,./web/site,testdata,*/testdata/*,*.mp4,*.m4s,go.sum
 # ISOBMFF box names that codespell mistakes for misspellings.
 #   trun - Track Fragment Run box
 #   nam  - the iTunes (c)nam metadata atom

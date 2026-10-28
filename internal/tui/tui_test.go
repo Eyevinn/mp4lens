@@ -251,3 +251,18 @@ func TestHelpAndQuit(t *testing.T) {
 		t.Error("q does not quit")
 	}
 }
+
+func TestNoMatchesAndEmptyFile(t *testing.T) {
+	m := newModel(t, "init.mp4", corruptStsz, Options{Query: "type:nope"})
+	press(m, "f", "e", "n", "j")
+	if m.onlyMatch || selectedPath(m) != "moov/trak/mdia/minf/stbl/stco" {
+		t.Errorf("onlyMatch=%t selected=%s", m.onlyMatch, selectedPath(m))
+	}
+
+	m = New(bytes.NewReader(nil), 0, Options{Name: "empty.mp4"})
+	m.Update(tea.WindowSizeMsg{Width: testW, Height: testH})
+	press(m, "j", "e", "/", "x", "enter", "f", "a", "m", "+")
+	if s := screen(m); !strings.Contains(s, "The file has no boxes.") {
+		t.Errorf("empty file:\n%s", s)
+	}
+}

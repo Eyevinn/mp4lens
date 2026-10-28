@@ -222,7 +222,7 @@ func (m *Model) selectNode(n *boxview.Node) {
 		m.updateDetail()
 		return
 	}
-	if m.rows[m.rowOf(n)] != n {
+	if i := m.rowOf(n); i >= len(m.rows) || m.rows[i] != n {
 		m.reveal(n)
 		if m.onlyMatch && !m.matched[n] {
 			m.onlyMatch = false
@@ -434,8 +434,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		m.next(m.errs, k == "E", "boxes with errors")
 		return nil
 	case "f":
-		if m.result == nil {
-			m.status = "No search to filter by; press / to search"
+		if m.result == nil || len(m.result.Nodes) == 0 {
+			m.status = "No matching boxes to show; press / to search"
 			return nil
 		}
 		m.onlyMatch = !m.onlyMatch

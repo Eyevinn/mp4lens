@@ -2,7 +2,7 @@
 web/site/
 
 # Python virtual environment for pre-commit
-venv/
+.venv/
 
 # Binaries built with go build
 /mp4lens
