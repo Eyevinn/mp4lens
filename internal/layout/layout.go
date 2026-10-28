@@ -44,6 +44,11 @@ type Field struct {
 	// QuickTime tells what a field of the QuickTime File Format is, and what ISOBMFF has in its place. It is
 	// empty for ISOBMFF fields.
 	QuickTime string `json:"quickTime,omitempty"`
+	// Spec is the name of the field in the specification of the box, such as entry_count or sample_size[3], or
+	// empty if the syntax tables do not have the field.
+	Spec string `json:"spec,omitempty"`
+	// About says what the field is.
+	About string `json:"about,omitempty"`
 }
 
 // Result is the layout of a box.
@@ -53,6 +58,8 @@ type Result struct {
 	Capped bool
 	// Err is the error of the decoder, if any. The fields that it read before the error are in Fields.
 	Err error
+	// Spec is the specification and clause of the box, or empty if the syntax tables do not have the box type.
+	Spec string
 }
 
 // Range is a range of positions in the file, from Start up to End.
@@ -76,6 +83,8 @@ func Box(data []byte, pos uint64, skip []Range, maxFields int) *Result {
 			res.Fields = audioEntry(b, res.Fields, data, pos)
 		case *mp4.UserDataTextBox:
 			res.Fields = userDataTexts(b, res.Fields, data, pos)
+		case *mp4.FtypBox, *mp4.StypBox:
+			res.Fields = brands(res.Fields, data, pos)
 		case *mp4.UnknownBox:
 			for i := range res.Fields {
 				if res.Fields[i].Name == "" && res.Fields[i].Kind == "bytes" {
@@ -85,6 +94,9 @@ func Box(data []byte, pos uint64, skip []Range, maxFields int) *Result {
 		}
 	}
 	addQuickTimeNotes(box, res.Fields)
+	if len(data) >= 8 {
+		res.Fields, res.Spec = addSyntax(string(data[4:8]), pos, res.Fields)
+	}
 	return res
 }
 
@@ -313,5 +325,6 @@ func Header(data []byte, pos uint64) *Result {
 		res.Fields = append(res.Fields, Field{Pos: pos + 8, Size: 8, Kind: "u64", Name: "largeSize",
 			Value: strconv.FormatUint(binary.BigEndian.Uint64(data[8:]), 10)})
 	}
+	res.Fields, res.Spec = addSyntax(string(data[4:8]), pos, res.Fields)
 	return res
 }

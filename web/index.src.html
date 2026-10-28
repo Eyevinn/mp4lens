@@ -219,11 +219,16 @@ h3 small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-lef
 .layout th { position: sticky; top: 0; background: var(--panel); text-align: left; font-family: var(--font-body); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--line); }
 .layout td { padding: 2px 10px; white-space: nowrap; vertical-align: top; }
 .layout td.n { text-align: right; color: var(--muted); }
-.layout td.val { white-space: normal; word-break: break-all; min-width: 12em; }
+.layout td.val { white-space: normal; overflow-wrap: anywhere; min-width: 12em; }
 .layout td.noname { color: var(--faint); font-style: italic; }
 .layout tr:hover td, .layout tr.hot td { background: var(--accent-soft); }
 .layout tr.qtrow td.nm { color: var(--qt); }
 .morebar { margin-top: 6px; font-size: 12.5px; color: var(--muted); }
+.meanings { margin-top: 8px; font-size: 12.5px; }
+.meanings summary { cursor: pointer; color: var(--muted); }
+.meanings dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; margin: 6px 0 0; }
+.meanings dt { font-family: var(--font-mono); }
+.meanings dd { margin: 0; color: var(--muted); }
 
 .hexwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
 .hex { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; padding: 8px 12px; width: max-content; font-variant-numeric: tabular-nums; }
@@ -795,7 +800,6 @@ const baseName = (name) => String(name || "").replace(/ #\d+$/, "");
 const layoutFor = (n) => (state.layout && state.layout.key === n.key ? state.layout : null);
 function renderFields(n) {
   const fields = n.fields;
-  if (!fields.length) return `<div class="none">No fields for this ${n.part ? "part" : "box"}.</div>`;
   const lay = layoutFor(n);
   const qtNotes = new Map(), named = new Set();
   if (lay) for (const f of lay.fields) {
@@ -819,22 +823,35 @@ function renderLayout(n) {
   const rows = lay.fields.slice(0, state.layoutLimit).map((f, i) =>
     `<tr data-li="${i}"${f.quickTime ? ` class="qtrow"` : ""}><td>${hex(f.pos, 8)}</td><td class="n">+${fmtInt(f.pos - n.pos)}</td>` +
     `<td class="n">${fmtInt(f.size)}</td><td>${esc(f.kind)}</td>` +
-    (f.name ? `<td class="nm">${esc(f.name)}</td>` : `<td class="noname">no name</td>`) +
+    (f.spec || f.name ? `<td class="nm" title="${esc((f.about ? f.about + " · " : "") + "mp4ff: " + (f.name || "no name"))}">${esc(f.spec || f.name)}</td>`
+      : `<td class="noname">no name</td>`) +
     `<td class="val">${esc(f.value)}${f.quickTime ? `<span class="qt" title="${esc(f.quickTime)}">QT</span>` : ""}</td></tr>`
   ).join("");
-  let html = `<h3>Layout<small>${fmtInt(lay.fields.length)} fields as mp4ff reads them${lay.capped ? ", more not recorded" : ""}</small></h3>`;
+  if (!lay.fields.length && !lay.error) { box.hidden = true; return; }
+  box.hidden = false;
+  let html = `<h3>Layout<small>${fmtInt(lay.fields.length)} fields as mp4ff reads them${lay.capped ? ", more not recorded" : ""}` +
+    `${lay.spec ? " · " + esc(lay.spec) : ""}</small></h3>`;
   if (lay.error) html += `<div class="alert err"><strong>The decoder stopped</strong><code>${esc(lay.error)}</code></div>`;
-  html += lay.fields.length
-    ? `<div class="layoutwrap"><table class="layout"><thead><tr><th>Position</th><th>Offset</th><th>Size</th><th>Kind</th><th>Name</th><th>Value</th></tr></thead><tbody>${rows}</tbody></table></div>`
-    : `<div class="none">No fields.</div>`;
+  if (lay.fields.length) {
+    html += `<div class="layoutwrap"><table class="layout"><thead><tr><th>Position</th><th>Offset</th><th>Size</th><th>Kind</th><th>Name</th><th>Value</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+  const meanings = [], seen = new Set();
+  for (const f of lay.fields) {
+    const base = (f.spec || "").replace(/\[\d+\]$/, "");
+    if (!f.about || seen.has(base)) continue;
+    seen.add(base);
+    meanings.push(`<dt>${esc(base)}</dt><dd>${esc(f.about)}</dd>`);
+  }
+  if (meanings.length) html += `<details class="meanings"><summary>Field meanings</summary><dl>${meanings.join("")}</dl></details>`;
   if (lay.fields.length > state.layoutLimit) {
     html += `<div class="morebar">Showing ${fmtInt(state.layoutLimit)} of ${fmtInt(lay.fields.length)} fields · <button type="button" class="btn" id="moreLayout">Show all</button></div>`;
   }
   box.innerHTML = html;
 }
-// loadLayout reads the layout of n, a box, and then shows it with the fields that it tags.
+// loadLayout reads the layout of n, a box, and then shows it with the fields that it tags. A plain container has
+// no fields of its own, so it gets no layout.
 async function loadLayout(n) {
-  if (n.part || !n.hdrLen || layoutFor(n)) return;
+  if (n.part || !n.hdrLen || n.container || layoutFor(n)) return;
   const token = state.token;
   let lay;
   try {
@@ -843,9 +860,9 @@ async function loadLayout(n) {
     lay = { fields: [], error: e.message };
   }
   if (token !== state.token || state.selected !== n) return;
-  state.layout = { key: n.key, fields: lay.fields || [], capped: !!lay.capped, error: lay.error || "" };
+  state.layout = { key: n.key, fields: lay.fields || [], capped: !!lay.capped, error: lay.error || "", spec: lay.spec || "" };
   renderLayout(n);
-  $("fieldsBox").innerHTML = renderFields(n);
+  if ($("fieldsBox")) $("fieldsBox").innerHTML = renderFields(n);
 }
 // markField marks the bytes from pos, of len bytes, in the hex view, or clears the marks if len is 0.
 function markField(pos, len) {
@@ -872,6 +889,7 @@ function renderDetail() {
     : n.unknown ? `<span class="pill muted">Unknown box type</span>`
     : n.hdrLen === 0 ? `<span class="pill warn">No box header</span>`
     : `<span class="pill ok">Decoded</span>`;
+  const containerPill = n.container ? `<span class="pill muted">Container</span>` : "";
   const long = n.part ? n.name : n.hdrLen === 0 ? "Bytes without a box header" : (n.name ? n.name + " box" : "");
   const boxKids = n.children.filter((c) => !c.part), partKids = n.children.length - boxKids.length;
   const hasVF = n.version !== undefined;
@@ -900,11 +918,11 @@ function renderDetail() {
   if (n.quickTime) alerts += `<div class="alert qtnote"><strong>QuickTime</strong><div>${esc(n.quickTime)}</div></div>`;
 
   d.innerHTML = crumbs +
-    `<div class="head"><h2>${esc(n.type)}</h2>${long ? `<span class="long">${esc(long)}</span>` : ""}${status}</div>` +
+    `<div class="head"><h2>${esc(n.type)}</h2>${long ? `<span class="long">${esc(long)}</span>` : ""}${status}${containerPill}</div>` +
     `<dl class="facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>` +
     alerts +
-    `<section><h3>Fields</h3><div id="fieldsBox">${renderFields(n)}</div></section>` +
-    (n.part || !n.hdrLen ? "" : `<section id="layoutBox"></section>`) +
+    (n.fields.length ? `<section><h3>Fields</h3><div id="fieldsBox">${renderFields(n)}</div></section>` : "") +
+    (n.part || !n.hdrLen || n.container ? "" : `<section id="layoutBox"></section>`) +
     `<section><h3>Bytes</h3><div class="hexwrap"><div class="hex" id="hex">Reading…</div></div>` +
     `<div class="hexbar"><div class="legend">` +
     `<span><i class="b-size"></i>size</span><span><i class="b-type"></i>type</span>` +
@@ -1007,7 +1025,7 @@ $("detail").addEventListener("mouseover", (e) => {
     const li = lay ? lay.fields.findIndex((f) => abs >= f.pos && abs < f.pos + f.size) : -1;
     if (li >= 0) {
       const f = lay.fields[li];
-      what = `${f.name || "field without a name"} · ${f.kind} · ${f.value}`;
+      what = `${f.spec || f.name || "field without a name"} · ${f.kind} · ${f.value}`;
       markField(f.pos, f.size);
       const tr = document.querySelector(`.layout tr[data-li="${li}"]`);
       if (tr) tr.classList.add("hot");

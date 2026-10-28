@@ -72,14 +72,25 @@ Each box shows two views of its content:
 
 - **Fields**: the `Info` output of the mp4ff box, the same as `mp4ff-info` prints, with values interpreted,
   such as times and fixed-point numbers
-- **Layout**: every read that the mp4ff decoder of the box makes, with its file position, offset in the box,
-  size, kind (such as `u32` or `bytes`), name and raw value. On the web page, pointing at a layout row or a
-  field marks its bytes, and pointing at a byte shows its field
+- **Layout**: the fields on the wire, as the mp4ff decoder reads them, with their file position, offset in the
+  box, size, kind (such as `u32` or `bytes`), name and raw value. This is the format of the box, also where the
+  mp4ff structs keep the data in another form, such as the cumulative sample numbers of `ctts`. On the web
+  page, pointing at a layout row or a field marks its bytes, and pointing at a byte shows its field
+
+Plain container boxes, whose child boxes start right after the header and fill the box, such as `moov` and
+`trak`, are marked as containers and have no fields or layout of their own. Boxes with fields before or after
+their children, such as `meta`, `stsd` and the sample entries, have both.
 
 The names in the layout come from the source of the mp4ff decoders: a read gets the name of the field that it
 sets, such as `TrackID` for `t.TrackID = sr.ReadUint32()`. `go generate ./internal/layout` makes the table of
 names from the mp4ff version in `go.mod`, and CI checks that it is up to date. Repeated reads are numbered, as
 `Matrix[2]` or `SampleSize #3`.
+
+For the common ISOBMFF boxes and the QuickTime atoms that mp4ff decodes, syntax tables in `internal/layout`
+give the fields their names in the specification, such as `entry_count` and `sample_size[3]`, say what each field
+is, name the specification and clause, and split packed values: the version and flags of a full box with the
+names of the flags, the sample flags of track fragments, the dependency bits of `sdtp`, the references of
+`sidx`, and the language of `mdhd`. Fixed-point values and times are also shown in their meaning.
 
 **Parts** are the structures that boxes hold as bytes, decoded with mp4ff and shown as children of the box:
 

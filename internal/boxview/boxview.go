@@ -200,6 +200,26 @@ func (n *Node) LongName() string {
 	return boxNames[n.Type]
 }
 
+// PlainContainer tells if the box only holds child boxes: they start right after the box header and fill the
+// box. Boxes with fields of their own before or after the child boxes, such as meta, stsd and sample entries, are
+// not plain containers.
+func (n *Node) PlainContainer() bool {
+	if n.Part != nil || n.HdrLen == 0 || n.Box == nil {
+		return false
+	}
+	if _, ok := n.Box.(mp4.ContainerBox); !ok {
+		return false
+	}
+	pos := n.Pos + uint64(n.HdrLen)
+	for _, c := range n.Children {
+		if !c.IsBox() || c.Pos != pos {
+			return false
+		}
+		pos = c.End()
+	}
+	return pos == n.End()
+}
+
 // IsBox tells if the node is a box, which may be bytes without a box header, and not a part of a box.
 func (n *Node) IsBox() bool {
 	return n.Part == nil

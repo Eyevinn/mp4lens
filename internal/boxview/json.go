@@ -38,11 +38,13 @@ func (n *Node) MarshalJSON() ([]byte, error) {
 		ChildErr  bool    `json:"childError,omitempty"`
 		Unknown   bool    `json:"unknown,omitempty"`
 		Part      bool    `json:"part,omitempty"`
+		Container bool    `json:"container,omitempty"`
 		QuickTime string  `json:"quickTime,omitempty"`
 		Children  []*Node `json:"children,omitempty"`
 	}
 	j := jsonNode{Type: n.Name(), LongName: n.LongName(), Pos: n.Pos, Size: n.Size, HdrLen: n.HdrLen,
-		Fields: n.Fields(), ChildErr: n.ChildErr, Unknown: n.Unknown(), Part: n.Part != nil, QuickTime: n.QuickTime,
+		Fields: n.Fields(), ChildErr: n.ChildErr, Unknown: n.Unknown(), Part: n.Part != nil,
+		Container: n.PlainContainer(), QuickTime: n.QuickTime,
 		Children: n.Children}
 	if v, f, ok := n.VersionFlags(); ok {
 		j.Version, j.Flags = &v, fmt.Sprintf("%06x", f)

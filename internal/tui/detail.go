@@ -28,6 +28,7 @@ var (
 	styleBorderFocus = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	styleQT          = lipgloss.NewStyle().Foreground(lipgloss.Color("4")).Bold(true)
 	stylePart        = lipgloss.NewStyle().Italic(true)
+	styleContainer   = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Faint(true)
 
 	styleHexSize  = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	styleHexType  = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
@@ -51,6 +52,9 @@ func (m *Model) detailContent(n *boxview.Node, width int) string {
 		head += "  " + ln + styleFaint.Render(", in "+n.Parent.Name())
 	case ln != "":
 		head += "  " + ln + " box"
+	}
+	if n.PlainContainer() {
+		head += "  " + styleContainer.Render("container")
 	}
 	add(head, m.statusText(n), "")
 
@@ -97,10 +101,16 @@ func (m *Model) detailContent(n *boxview.Node, width int) string {
 		add("", styleFaint.Render("mp4ff does not know this box type, so only its header is decoded."))
 	}
 
-	res := m.layoutOf(n)
-	add("", styleHead.Render("Fields"))
-	add(fieldLines(n.Fields(), quickTimeKeys(res))...)
-	if res != nil {
+	// A plain container has no fields of its own, so its layout is only the box header.
+	var res *layout.Result
+	if !n.PlainContainer() {
+		res = m.layoutOf(n)
+	}
+	if fields := n.Fields(); len(fields) > 0 {
+		add("", styleHead.Render("Fields"))
+		add(fieldLines(fields, quickTimeKeys(res))...)
+	}
+	if res != nil && (len(res.Fields) > 0 || res.Err != nil) {
 		add("")
 		add(m.layoutLines(n, res)...)
 	}
@@ -182,9 +192,6 @@ func factLines(facts [][2]string, width int) []string {
 // fieldLines lays out the fields, with a QT tag after those whose keys, in lower case without spaces and
 // underscores, start with "quicktime" or are in qtKeys.
 func fieldLines(fields []boxview.Field, qtKeys map[string]bool) []string {
-	if len(fields) == 0 {
-		return []string{styleFaint.Render("No fields")}
-	}
 	keyW := 0
 	for _, f := range fields {
 		keyW = max(keyW, min(maxKeyWidth, 2*f.Indent+ansi.StringWidth(f.Key)))
@@ -390,13 +397,16 @@ func (m *Model) layoutLines(n *boxview.Node, res *layout.Result) []string {
 	if res.Capped {
 		title += styleFaint.Render(", more not recorded")
 	}
+	if res.Spec != "" {
+		title += styleFaint.Render(" · " + res.Spec)
+	}
 	lines := []string{title}
 	if res.Err != nil && !n.ChildErr {
 		lines = append(lines, styleErr.Render("The decoder stopped: ")+res.Err.Error())
 	}
 	nameW := 4
 	for _, f := range res.Fields {
-		nameW = max(nameW, min(maxLayoutName, ansi.StringWidth(f.Name)))
+		nameW = max(nameW, min(maxLayoutName, ansi.StringWidth(fieldName(f))))
 	}
 	var notes []string
 	seen := map[string]bool{}
@@ -405,7 +415,7 @@ func (m *Model) layoutLines(n *boxview.Node, res *layout.Result) []string {
 			lines = append(lines, styleFaint.Render(fmt.Sprintf("%d more fields. Press m for more.", len(res.Fields)-i)))
 			break
 		}
-		name := f.Name
+		name := fieldName(f)
 		if name == "" {
 			name = styleFaint.Render("(no name)")
 		}
@@ -420,7 +430,37 @@ func (m *Model) layoutLines(n *boxview.Node, res *layout.Result) []string {
 		}
 		lines = append(lines, line)
 	}
-	return append(lines, notes...)
+	lines = append(lines, notes...)
+	return append(lines, aboutLines(res.Fields)...)
+}
+
+// fieldName returns the name of a layout field in the specification, or else the name that mp4ff gives it.
+func fieldName(f layout.Field) string {
+	if f.Spec != "" {
+		return f.Spec
+	}
+	return f.Name
+}
+
+// aboutLines say what each field of the layout is, once for all the repeats of a field.
+func aboutLines(fields []layout.Field) []string {
+	var lines []string
+	seen := map[string]bool{}
+	for _, f := range fields {
+		if f.About == "" {
+			continue
+		}
+		base, _, _ := strings.Cut(f.Spec, "[")
+		if seen[base] {
+			continue
+		}
+		seen[base] = true
+		lines = append(lines, styleFaint.Render(base+": ")+f.About)
+	}
+	if len(lines) > 0 {
+		lines = append([]string{"", styleHead.Render("Field meanings")}, lines...)
+	}
+	return lines
 }
 
 // quickTimeKeys returns the names of the QuickTime fields of res, as normalKey writes them, without the

@@ -46,14 +46,15 @@ func TestTkhd(t *testing.T) {
 	if res.Err != nil || res.Capped {
 		t.Fatalf("err=%v capped=%t", res.Err, res.Capped)
 	}
-	want := "size,boxType,versionAndFlags,CreationTime,ModificationTime,TrackID,ReservedAfterTrackID,Duration," +
+	want := "size,boxType,version,flags,CreationTime,ModificationTime,TrackID,ReservedAfterTrackID,Duration," +
 		"Reserved 8 x 0,Layer,AlternateGroup,Volume,,Matrix[0],Matrix[1],Matrix[2],Matrix[3],Matrix[4],Matrix[5]," +
 		"Matrix[6],Matrix[7],Matrix[8],Width,Height"
 	if got := names(res.Fields); got != want {
 		t.Errorf("names:\n got %s\nwant %s", got, want)
 	}
-	id := res.Fields[5]
-	if id.Pos != pos+20 || id.Size != 4 || id.Kind != "u32" || id.Value != "2" || id.QuickTime != "" {
+	id := res.Fields[6]
+	if id.Pos != pos+20 || id.Size != 4 || id.Kind != "u32" || id.Value != "2" || id.QuickTime != "" ||
+		id.Spec != "track_ID" || res.Spec != "ISO/IEC 14496-12:2026 8.3.2" {
 		t.Errorf("TrackID: %+v", id)
 	}
 	if typ := res.Fields[1]; typ.Value != `"tkhd" (746b6864)` {
@@ -74,15 +75,15 @@ func TestTkhd(t *testing.T) {
 func TestRepeats(t *testing.T) {
 	data, pos := boxAt(t, "1.m4s", "trun", 0)
 	res := Box(data, pos, nil, 1000)
-	want := "size,boxType,versionAndFlags,sampleCount,DataOffset,dur #1,size #1,flags #1,cto #1,dur #2"
+	want := "size,boxType,version,flags,sampleCount,DataOffset,dur #1,size #1,flags #1,cto #1"
 	if got := names(res.Fields[:10]); got != want {
 		t.Errorf("names:\n got %s\nwant %s", got, want)
 	}
-	if n := len(res.Fields); n != 5+4*60 {
+	if n := len(res.Fields); n != 6+4*60 {
 		t.Errorf("%d fields", n)
 	}
-	res = Box(data, pos, nil, 7)
-	if !res.Capped || len(res.Fields) != 7 || res.Err != nil {
+	res = Box(data, pos, nil, 7) // 7 reads, and version and flags make 8 fields
+	if !res.Capped || len(res.Fields) != 8 || res.Err != nil {
 		t.Errorf("capped=%t fields=%d err=%v", res.Capped, len(res.Fields), res.Err)
 	}
 }
@@ -103,7 +104,7 @@ func TestError(t *testing.T) {
 	if res.Err == nil {
 		t.Fatal("no error")
 	}
-	if got := names(res.Fields); !strings.HasPrefix(got, "size,boxType,versionAndFlags,") {
+	if got := names(res.Fields); !strings.HasPrefix(got, "size,boxType,version,flags,") {
 		t.Errorf("fields before the error: %s", got)
 	}
 }
@@ -181,19 +182,19 @@ func TestCoverage(t *testing.T) {
 func TestTables(t *testing.T) {
 	data, pos := boxAt(t, "prog_8s.mp4", "stsz", 0)
 	res := Box(data, pos, nil, 100)
-	want := "size,boxType,versionAndFlags,SampleUniformSize,SampleNumber,SampleSize #1,SampleSize #2"
-	if got := names(res.Fields[:7]); got != want {
+	want := "size,boxType,version,flags,SampleUniformSize,SampleNumber,SampleSize #1,SampleSize #2"
+	if got := names(res.Fields[:8]); got != want {
 		t.Errorf("stsz:\n got %s\nwant %s", got, want)
 	}
-	if f := res.Fields[5]; f.Value != "128" || f.Pos != pos+20 || f.Size != 4 {
+	if f := res.Fields[6]; f.Value != "128" || f.Pos != pos+20 || f.Size != 4 || f.Spec != "entry_size[1]" {
 		t.Errorf("first sample size: %+v", f)
 	}
-	if !res.Capped || len(res.Fields) != 100 {
+	if !res.Capped || len(res.Fields) != 101 {
 		t.Errorf("capped=%t fields=%d", res.Capped, len(res.Fields))
 	}
 	data, pos = boxAt(t, "prog_8s.mp4", "stts", 0)
 	res = Box(data, pos, nil, 100)
-	if got := names(res.Fields[4:]); got != "SampleCount #1,SampleDelta #1" {
+	if got := names(res.Fields[5:]); got != "SampleCount #1,SampleDelta #1" {
 		t.Errorf("stts: %s", got)
 	}
 }
@@ -217,4 +218,82 @@ func TestAudioEntry(t *testing.T) {
 	if got := len(res.Fields); got != 12 {
 		t.Errorf("ISOBMFF mp4a has %d fields", got)
 	}
+}
+
+// spec returns the field of res whose name in the specification is name.
+func spec(t *testing.T, res *Result, name string) Field {
+	t.Helper()
+	for _, f := range res.Fields {
+		if f.Spec == name {
+			return f
+		}
+	}
+	t.Fatalf("no field %s in %v", name, res.Fields)
+	return Field{}
+}
+
+func TestSyntax(t *testing.T) {
+	data, pos := boxAt(t, "prog_8s.mp4", "ctts", 0)
+	res := Box(data, pos, nil, 100)
+	if res.Spec != "ISO/IEC 14496-12:2026 8.6.1.3" {
+		t.Errorf("ctts spec %q", res.Spec)
+	}
+	if f := spec(t, res, "sample_offset[2]"); f.Value != "15000" || !strings.HasPrefix(f.About, "composition time minus") {
+		t.Errorf("sample_offset[2]: %+v", f)
+	}
+	if f := spec(t, res, "flags"); f.Pos != pos+9 || f.Size != 3 || f.Value != "000000" {
+		t.Errorf("flags: %+v", f)
+	}
+
+	data, pos = boxAt(t, "1.m4s", "trun", 0)
+	res = Box(data, pos, nil, 100)
+	if f := spec(t, res, "flags"); f.Value != "000f01 (data-offset-present, sample-duration-present, sample-size-present, "+
+		"sample-flags-present, sample-composition-time-offsets-present)" {
+		t.Errorf("trun flags: %q", f.Value)
+	}
+	if f := spec(t, res, "sample_flags[2]"); !strings.HasSuffix(f.Value, "(0x01010000: is_leading=0 sample_depends_on=1 "+
+		"sample_is_depended_on=0 sample_has_redundancy=0 sample_padding_value=0 sample_is_non_sync_sample=1 "+
+		"sample_degradation_priority=0)") {
+		t.Errorf("sample_flags[2]: %q", f.Value)
+	}
+
+	data, pos = boxAt(t, "init.mp4", "tkhd", 0)
+	res = Box(data, pos, nil, 100)
+	if f := spec(t, res, "flags"); f.Value != "000007 (track_enabled, track_in_movie, track_in_preview)" {
+		t.Errorf("tkhd flags: %q", f.Value)
+	}
+	if f := spec(t, res, "width"); f.Value != "41943040 (640)" {
+		t.Errorf("tkhd width: %q", f.Value)
+	}
+	data, pos = boxAt(t, "init.mp4", "mdhd", 0)
+	res = Box(data, pos, nil, 100)
+	if f := spec(t, res, "language"); f.Value != "21956 (und)" {
+		t.Errorf("language: %q", f.Value)
+	}
+	if f := spec(t, res, "creation_time"); f.Value != "3505114137 (2015-01-26T10:48:57Z)" {
+		t.Errorf("creation_time: %q", f.Value)
+	}
+
+	data, pos = boxAt(t, "init.mp4", "ftyp", 0)
+	res = Box(data, pos, nil, 100)
+	if got := names(res.Fields); got != "size,boxType,major_brand,minor_version,compatible_brands #1,"+
+		"compatible_brands #2,compatible_brands #3,compatible_brands #4" {
+		t.Errorf("ftyp names %s", got)
+	}
+	if f := spec(t, res, "compatible_brands[2]"); f.Value != `"iso5"` {
+		t.Errorf("compatible_brands[2]: %+v", f)
+	}
+}
+
+func TestSidxSyntax(t *testing.T) {
+	data, pos := boxAt(t, "bbb5s_aac_sidx.mp4", "sidx", 0)
+	res := Box(data, pos, nil, 100)
+	f := spec(t, res, "reference[1]")
+	if !strings.Contains(f.Value, "reference_type=0 referenced_size=") {
+		t.Errorf("reference[1]: %+v", f)
+	}
+	if f := spec(t, res, "sap[1]"); !strings.Contains(f.Value, "starts_with_SAP=1") {
+		t.Errorf("sap[1]: %+v", f)
+	}
+	spec(t, res, "subsegment_duration[1]")
 }

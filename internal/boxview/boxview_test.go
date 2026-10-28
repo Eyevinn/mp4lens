@@ -378,7 +378,7 @@ func TestLayout(t *testing.T) {
 	tr, r := decodeFile(t, "init.mp4", nil)
 	tkhd := byPath(t, tr, "moov/trak/tkhd")
 	res := tr.Layout(tkhd, r)
-	if res == nil || res.Err != nil || len(res.Fields) != 24 || res.Fields[5].Name != "TrackID" {
+	if res == nil || res.Err != nil || len(res.Fields) != 25 || res.Fields[6].Name != "TrackID" {
 		t.Fatalf("tkhd layout: %+v", res)
 	}
 	moov := byPath(t, tr, "moov")
@@ -389,5 +389,45 @@ func TestLayout(t *testing.T) {
 	mdat := byPath(t, seg, "mdat")
 	if res := seg.Layout(mdat, r2); len(res.Fields) != 2 || res.Fields[0].Value != strconv.FormatUint(mdat.Size, 10) {
 		t.Errorf("mdat layout: %+v", res)
+	}
+}
+
+func TestPlainContainer(t *testing.T) {
+	tr, _ := decodeFile(t, "qt_h264_aac.mov", nil)
+	want := map[string]bool{
+		"moov": true, "moov/trak": true, "moov/trak/mdia": true, "moov/trak/mdia/minf": true,
+		"moov/trak/mdia/minf/stbl": true, "moov/trak/mdia/minf/dinf": true, "moov/trak/edts": true,
+		"moov/trak/mdia/minf/dinf/dref":               false, // version, flags and entry count first
+		"moov/trak/mdia/minf/stbl/stsd":               false,
+		"moov/trak/mdia/minf/stbl/stsd/avc1":          false, // sample entry fields first
+		"moov/trak/mdia/minf/stbl/stsd/mp4a/wave":     true,
+		"moov/trak/mdia/minf/stbl/stsd/avc1/avcC":     false, // not a container
+		"moov/trak/mdia/minf/stbl/stsd/avc1/avcC/SPS": false, // a part
+		"moov/udta":           true,
+		"moov/trak/mdia/mdhd": false,
+		"moov/trak/mdia/minf/stbl/stsd/mp4a/wave/esds":               false,
+		"moov/trak/mdia/minf/stbl/stsd/mp4a/wave/esds/ES_Descriptor": false,
+	}
+	for path, w := range want {
+		var found *Node
+		for _, n := range tr.Nodes {
+			if n.Path() == path {
+				found = n
+				break
+			}
+		}
+		if found == nil {
+			t.Errorf("no %s", path)
+			continue
+		}
+		if got := found.PlainContainer(); got != w {
+			t.Errorf("%s: PlainContainer = %t", path, got)
+		}
+	}
+	// A udta that ends with the QuickTime terminator holds more than its child boxes.
+	data := []byte("\x00\x00\x00\x18udta\x00\x00\x00\x0cWLOC\x00\x01\x00\x02\x00\x00\x00\x00")
+	tr = Decode(bytes.NewReader(data), int64(len(data)), "")
+	if tr.Boxes[0].PlainContainer() {
+		t.Error("udta with a terminator is a plain container")
 	}
 }

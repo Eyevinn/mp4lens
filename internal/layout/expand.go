@@ -159,3 +159,23 @@ func userDataTexts(b *mp4.UserDataTextBox, fields []Field, data []byte, base uin
 	}
 	return out
 }
+
+// brands splits the "data" field of an ftyp or styp box into the major brand, the minor version and the
+// compatible brands, numbered from 1.
+func brands(fields []Field, data []byte, base uint64) []Field {
+	if len(fields) != 3 || fields[2].Name != "data" || fields[2].Size < 8 || fields[2].Size%4 != 0 {
+		return fields
+	}
+	brandsField := fields[2]
+	out := fields[:2]
+	off := int(brandsField.Pos - base)
+	out = append(out, Field{Pos: base + uint64(off), Size: 4, Kind: "string", Name: "major_brand",
+		Value: strconv.Quote(string(data[off : off+4]))})
+	out = append(out, Field{Pos: base + uint64(off+4), Size: 4, Kind: "u32", Name: "minor_version",
+		Value: strconv.FormatUint(uint64(binary.BigEndian.Uint32(data[off+4:])), 10)})
+	for i, p := 0, off+8; p+4 <= off+brandsField.Size; i, p = i+1, p+4 {
+		out = append(out, Field{Pos: base + uint64(p), Size: 4, Kind: "string",
+			Name: "compatible_brands #" + strconv.Itoa(i+1), Value: strconv.Quote(string(data[p : p+4]))})
+	}
+	return out
+}

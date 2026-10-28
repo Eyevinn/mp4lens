@@ -115,6 +115,7 @@ type layoutResult struct {
 	Fields []layout.Field `json:"fields"`
 	Capped bool           `json:"capped,omitempty"`
 	Error  string         `json:"error,omitempty"`
+	Spec   string         `json:"spec,omitempty"`
 }
 
 func boxLayout(_ js.Value, args []js.Value) (ret any) {
@@ -133,7 +134,7 @@ func boxLayout(_ js.Value, args []js.Value) (ret any) {
 	res := last.tree.Layout(n, last.r)
 	lr := layoutResult{Fields: []layout.Field{}}
 	if res != nil {
-		lr.Capped = res.Capped
+		lr.Capped, lr.Spec = res.Capped, res.Spec
 		if res.Fields != nil {
 			lr.Fields = res.Fields
 		}
