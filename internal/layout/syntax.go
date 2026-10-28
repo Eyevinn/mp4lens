@@ -209,14 +209,6 @@ var syntaxes = map[string]boxSyntax{
 		"ns":    {"key_namespace", "naming scheme of the key, such as mdta", nil},
 		"Value": {"key_value", "the key, such as com.apple.quicktime.make", nil},
 	}},
-	"load": {spec: quickTime + ", track load settings atom", fields: map[string]fieldSyntax{
-		"PreloadStartTime": {"preload start time", "start of the part to preload, in the movie time scale", nil},
-		"PreloadDuration":  {"preload duration", "length of the part to preload, or -1 for up to the end", nil},
-		"PreloadFlags":     {"preload flags", "1 to preload always, 2 to preload only if the track is enabled", nil},
-		"DefaultHints":     {"default hints", "playback hints, such as 0x100 for high quality", nil},
-	}},
-	"alis": {spec: quickTime + ", data reference atoms", flags: []flagBit{{0x1, "media data in the same file"}},
-		fields: map[string]fieldSyntax{"Data": {"data", "Macintosh alias record of the file with the media data", nil}}},
 	"gmin": {spec: quickTime + ", base media info atom", fields: map[string]fieldSyntax{
 		"GraphicsMode": {"graphics mode", "QuickDraw transfer mode", nil},
 		"Opcolor[]":    {"opcolor", "red, green and blue of the transfer mode", nil},
