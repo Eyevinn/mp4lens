@@ -48,4 +48,15 @@ var boxNames = map[string]string{
 	"iden": "WebVTT Cue ID", "stpp": "XML Subtitle Sample Entry", "mime": "MIME Type",
 	"wave": "QuickTime Sound Information", "vexu": "Video Extended Usage", "hfov": "Horizontal Field of View",
 	"\xa9nam": "Title", "\xa9ART": "Artist", "\xa9too": "Encoding Tool", "\xa9cpy": "Copyright",
+	"chpl": "Nero Chapter List", "tx3g": "3GPP Timed Text Sample Entry", "ftab": "Font Table",
+	// iTunes metadata items in ilst.
+	"\xa9alb": "Album", "\xa9gen": "Genre", "\xa9day": "Year", "\xa9wrt": "Composer", "\xa9cmt": "Comment",
+	"\xa9lyr": "Lyrics", "\xa9grp": "Grouping", "aART": "Album Artist", "trkn": "Track Number",
+	"disk": "Disc Number", "cpil": "Compilation", "tmpo": "Tempo", "pgap": "Gapless Album", "covr": "Cover Art",
+	"gnre": "Genre (ID3v1)", "stik": "Media Kind", "rtng": "Content Rating", "desc": "Description",
+	"ldes": "Long Description", "purd": "Purchase Date", "sonm": "Sort Title", "soar": "Sort Artist",
+	"soal": "Sort Album", "soaa": "Sort Album Artist", "soco": "Sort Composer", "tvsh": "TV Show",
+	"tvsn": "TV Season", "tves": "TV Episode", "tven": "TV Episode ID", "tvnn": "TV Network",
+	"pcst": "Podcast", "purl": "Podcast URL", "egid": "Podcast Episode GUID", "catg": "Category",
+	"keyw": "Keywords", "----": "Freeform Item", "mean": "Freeform Item Domain",
 }

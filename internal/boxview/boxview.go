@@ -197,6 +197,9 @@ func (n *Node) LongName() string {
 	if n.HdrLen == 0 {
 		return ""
 	}
+	if name := freeformName(n); name != "" {
+		return "Freeform Item " + name
+	}
 	return boxNames[n.Type]
 }
 

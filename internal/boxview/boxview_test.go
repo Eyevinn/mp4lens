@@ -469,11 +469,30 @@ func TestTextTracksAndItems(t *testing.T) {
 	}
 	for path, want := range map[string]string{
 		"moov/udta/meta/ilst/trkn/data": "(track 5 of 13)",
-		"moov/udta/meta/ilst/©nam/data": `("Chapters")`,
+		"moov/udta/meta/ilst/©nam/data": `"Chapters"`,
 	} {
 		res := tr.Layout(byPath(t, tr, path), r)
-		if v := res.Fields[len(res.Fields)-1].Value; !strings.HasSuffix(v, want) {
+		if v := res.Fields[len(res.Fields)-1].Value; !strings.Contains(v, want) {
 			t.Errorf("%s: value %q", path, v)
+		}
+	}
+}
+
+func TestDurations(t *testing.T) {
+	tr, r := decodeFile(t, "chapters_subs.m4a", nil)
+	for _, path := range []string{"moov/mvhd", "moov/trak/tkhd", "moov/trak/mdia/mdhd"} {
+		res := tr.Layout(byPath(t, tr, path), r)
+		found := false
+		for _, f := range res.Fields {
+			if f.Name == "Duration" {
+				found = true
+				if !strings.HasSuffix(f.Value, "s)") {
+					t.Errorf("%s: duration %q has no time", path, f.Value)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("%s: no duration", path)
 		}
 	}
 }

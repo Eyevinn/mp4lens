@@ -35,7 +35,8 @@ func TestItemData(t *testing.T) {
 		{"gnre", "", 0, []byte{0, 0x12}, "ID3v1 genre 17, the value minus 1"},
 		{"----", "iTunSMPB", 1, []byte(smpb), "encoder delay 2112, padding 509, 1291715 samples"},
 		{"----", "iTunNORM", 1, []byte(" 0000085B"), `" 0000085B"`},
-		{"©nam", "", 1, []byte("Owner"), `"Owner"`},
+		{"©nam", "", 1, []byte("Owner"), ""}, // the value shows short texts already
+		{"©alb", "", 1, []byte("Guldkorn Från Mäster Cees"), `"Guldkorn Från Mäster Cees"`},
 		{"©nam", "", 2, []byte{0, 'O', 0, 'K'}, `"OK"`},
 		{"tmpo", "", 21, []byte{0, 0xbe}, "190"},
 		{"rtng", "", 21, []byte{0xff}, "-1"},

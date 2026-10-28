@@ -39,10 +39,28 @@ func (t *Tree) Layout(n *Node, r io.ReaderAt) *layout.Result {
 		}
 	}
 	res := layout.Box(data, n.Pos, skip, MaxLayoutFields)
-	if item := n.Parent; n.Type == "data" && item != nil && item.Parent != nil && item.Parent.Type == "ilst" {
-		layout.ItemData(item.Type, freeformName(item), res.Fields, data, n.Pos)
+	switch {
+	case n.Type == "data" && n.Parent != nil && n.Parent.Parent != nil && n.Parent.Parent.Type == "ilst":
+		layout.ItemData(n.Parent.Type, freeformName(n.Parent), res.Fields, data, n.Pos)
+	case n.Type == "tkhd":
+		layout.AddDuration(res.Fields, "Duration", movieTimescale(n))
+	case n.Type == "mehd":
+		layout.AddDuration(res.Fields, "FragmentDuration", movieTimescale(n))
 	}
 	return res
+}
+
+// movieTimescale returns the time scale of the mvhd box in the moov box two levels up from n, or 0.
+func movieTimescale(n *Node) uint64 {
+	if n.Parent == nil || n.Parent.Parent == nil {
+		return 0
+	}
+	for _, c := range n.Parent.Parent.Children {
+		if mvhd, ok := c.Box.(*mp4.MvhdBox); ok {
+			return uint64(mvhd.Timescale)
+		}
+	}
+	return 0
 }
 
 // freeformName returns the name of a freeform metadata item ----, such as iTunSMPB, or "".

@@ -46,6 +46,9 @@ func itemMeaning(item, name string, dataType int, v []byte) string {
 				return gapless
 			}
 		}
+		if strings.HasPrefix(bytesText(v), `"`) {
+			return "" // the value shows the text already
+		}
 		return quoteText(string(v))
 	case 2, 5: // UTF-16
 		if len(v)%2 != 0 {

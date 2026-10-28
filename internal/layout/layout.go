@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/Eyevinn/mp4ff/bits"
@@ -94,6 +95,12 @@ func Box(data []byte, pos uint64, skip []Range, maxFields int) *Result {
 		}
 	}
 	addQuickTimeNotes(box, res.Fields)
+	switch b := box.(type) {
+	case *mp4.MvhdBox:
+		AddDuration(res.Fields, "Duration", uint64(b.Timescale))
+	case *mp4.MdhdBox:
+		AddDuration(res.Fields, "Duration", uint64(b.Timescale))
+	}
 	if len(data) >= 8 {
 		key := string(data[4:8])
 		switch b := box.(type) {
@@ -115,6 +122,26 @@ func Box(data []byte, pos uint64, skip []Range, maxFields int) *Result {
 		res.Fields, res.Spec = addSyntax(key, pos, res.Fields)
 	}
 	return res
+}
+
+// AddDuration adds the time of the field called name in fields, a duration in units of timescale per second, as
+// in "2m25.75s". A duration with all bits set, which means an unknown duration, gets no time.
+func AddDuration(fields []Field, name string, timescale uint64) {
+	if timescale == 0 {
+		return
+	}
+	for i := range fields {
+		f := &fields[i]
+		if f.Name != name {
+			continue
+		}
+		v, err := strconv.ParseUint(f.Value, 10, 64)
+		if err != nil || v == 0xffffffff && f.Size == 4 || v == 0xffffffffffffffff {
+			continue
+		}
+		d := time.Duration(float64(v) / float64(timescale) * float64(time.Second))
+		f.Value += " (" + d.Round(time.Millisecond).String() + ")"
+	}
 }
 
 // recorder is a bits.SliceReader that records the reads.
