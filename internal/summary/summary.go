@@ -3,6 +3,7 @@
 package summary
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -96,6 +97,9 @@ func Of(t *boxview.Tree, r io.ReaderAt) *Summary {
 		s.Sections = append(s.Sections, sec)
 	}
 	if sec := metadataSection(moov); len(sec.Rows) > 0 {
+		s.Sections = append(s.Sections, sec)
+	}
+	if sec := imagesSection(t, r); len(sec.Rows) > 0 {
 		s.Sections = append(s.Sections, sec)
 	}
 	if chpl := child(child(moov, "udta"), "chpl"); chpl != nil {
@@ -346,6 +350,88 @@ func addUserData(s *Section, udta *boxview.Node) {
 			s.add("name", b.Name, c)
 		}
 	}
+}
+
+// imageScan is the number of bytes at the start of a payload in which an image signature is looked for, to also
+// find an image after a version and flags or a child box header.
+const imageScan = 16
+
+// maxImage is the largest box in which an image is looked for.
+const maxImage = 32 << 20
+
+// imageSignatures are the signatures of the images that imagesSection finds.
+var imageSignatures = []struct {
+	sig  []byte
+	mime string
+}{
+	{[]byte{0xff, 0xd8, 0xff}, "image/jpeg"},
+	{[]byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}, "image/png"},
+}
+
+// imagesSection returns the images found by their signatures at the start of the payloads of boxes without
+// child boxes, such as the thumbnails that cameras write in udta. It leaves out media data, fragments, sample
+// tables and the data boxes of metadata items, whose cover art the metadata section has.
+func imagesSection(t *boxview.Tree, r io.ReaderAt) Section {
+	s := Section{Title: "Images"}
+	if r == nil {
+		return s
+	}
+	for _, n := range t.Nodes {
+		start := n.Pos + uint64(n.HdrLen)
+		if !n.IsBox() || n.HdrLen == 0 || n.Size > maxImage || n.End() > uint64(t.Size) || start+imageScan >= n.End() ||
+			hasChildBoxes(n) || !imageCandidate(n) {
+			continue
+		}
+		head := make([]byte, min(n.End()-start, imageScan+8))
+		if _, err := r.ReadAt(head, int64(start)); err != nil {
+			continue
+		}
+		if off, mime := findImage(head); mime != "" {
+			pos := start + uint64(off)
+			s.Rows = append(s.Rows, Row{Name: n.Path(), Key: n.Key,
+				Value: fmt.Sprintf("%s image, %d bytes", strings.ToUpper(strings.TrimPrefix(mime, "image/")), n.End()-pos),
+				Image: &Image{Pos: pos, Size: n.End() - pos, Type: mime}})
+		}
+	}
+	return s
+}
+
+// imageCandidate tells if an image is looked for in the box of n: not in media data, fragments, sample tables
+// or metadata values.
+func imageCandidate(n *boxview.Node) bool {
+	if _, ok := n.Box.(*mp4.DataBox); ok {
+		return false
+	}
+	for p := n; p != nil; p = p.Parent {
+		switch p.Type {
+		case "mdat", "moof", "stbl", "free", "skip", "wide":
+			return false
+		}
+	}
+	return true
+}
+
+// hasChildBoxes tells if n has child boxes.
+func hasChildBoxes(n *boxview.Node) bool {
+	for _, c := range n.Children {
+		if c.IsBox() {
+			return true
+		}
+	}
+	return false
+}
+
+// findImage returns the offset and media type of the first image signature in the first imageScan bytes of head,
+// or "" if there is none.
+func findImage(head []byte) (int, string) {
+	for off := 0; off <= imageScan && off < len(head); off++ {
+		for _, sig := range imageSignatures {
+			if bytes.HasPrefix(head[off:], sig.sig) {
+				return off, sig.mime
+			}
+		}
+	}
+	return 0, ""
 }
 
 // chplSection returns the chapters of a Nero chapter list.

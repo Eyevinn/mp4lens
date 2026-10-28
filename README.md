@@ -89,7 +89,9 @@ The summary has a section for the file, the movie, the metadata, the chapters an
 On the web page, a file without errors opens with the summary, and the names of values that come from a box
 select that box. The file name above the summary, the File summary button and the `s` key bring it back.
 Images in the file are shown: the cover art in `covr` and the images of chapter image tracks in the summary, and
-the image of a selected `data` box in the box pane. A click opens an image on its own.
+the image of a selected `data` box in the box pane. A box without child boxes whose payload has a JPEG or PNG
+signature in its first 16 bytes, such as a thumbnail that a camera writes in `udta`, is shown as an image from
+there to its end, in the box pane and in the Images section of the summary. A click opens an image on its own.
 
 ## Fields, layout and parts
 

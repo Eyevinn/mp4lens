@@ -941,7 +941,7 @@ function renderDetail() {
     `<dl class="facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>` +
     alerts +
     (n.fields.length ? `<section><h3>Fields</h3><div id="fieldsBox">${renderFields(n)}</div></section>` : "") +
-    (img ? `<section><h3>Image</h3>${imageHtml(img.pos, img.size, img.mime, "preview")}</section>` : "") +
+    (img ? `<section><h3>Image</h3>${imageHtml(img.pos, img.size, img.mime, "preview")}</section>` : `<section id="sigImage" hidden></section>`) +
     (n.part || !n.hdrLen || n.container ? "" : `<section id="layoutBox"></section>`) +
     `<section><h3>Bytes</h3><div class="hexwrap"><div class="hex" id="hex">Reading…</div></div>` +
     `<div class="hexbar"><div class="legend">` +
@@ -952,6 +952,7 @@ function renderDetail() {
     (hitsIn(n.pos, end).length ? `<span><i class="b-hit"></i>search hit</span>` : "") +
     `</div><span id="hexHover"></span><span id="hexMore"></span></div></section>`;
   fillImages();
+  if (!img) detectImage(n);
   renderHex(n);
   renderLayout(n);
   loadLayout(n);
@@ -985,6 +986,33 @@ function imageOf(n) {
   if (!mime) return null;
   const pos = n.pos + n.hdrLen + 8; // after the header, the type indicator and the locale
   return { pos, size: n.pos + n.size - pos, mime };
+}
+
+// imageSignatures are the signatures of the images that the box pane shows when the payload of a box without
+// child boxes has one within its first imageScan bytes, such as a camera thumbnail in udta.
+const imageSignatures = [
+  { sig: [0xff, 0xd8, 0xff], mime: "image/jpeg", name: "JPEG" },
+  { sig: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], mime: "image/png", name: "PNG" },
+];
+const imageScan = 16;
+// detectImage looks for an image signature at the start of the payload of n, and shows the image from there to
+// the end of the box in the sigImage section of the box pane.
+async function detectImage(n) {
+  if (n.part || !n.hdrLen || n.type === "mdat" || n.children.some((c) => !c.part)) return;
+  const start = n.pos + n.hdrLen, end = Math.min(n.pos + n.size, state.tree.size);
+  if (end - start <= imageScan) return;
+  const head = new Uint8Array(await state.file.blob.slice(start, Math.min(end, start + imageScan + 8)).arrayBuffer());
+  const box = $("sigImage");
+  if (state.selected !== n || !box) return;
+  for (let off = 0; off <= imageScan; off++) {
+    const s = imageSignatures.find((x) => x.sig.every((b, i) => head[off + i] === b));
+    if (!s) continue;
+    box.hidden = false;
+    box.innerHTML = `<h3>Image</h3>${imageHtml(start + off, end - start - off, s.mime, "preview")}` +
+      `<div class="imgnote">Found by its ${s.name} signature at offset ${n.hdrLen + off} of the box, and shown to the end of the box.</div>`;
+    fillImages();
+    return;
+  }
 }
 
 // renderOverview shows the summary of the file, which it asks the decoder for the first time.

@@ -2,6 +2,8 @@ package summary
 
 import (
 	"bytes"
+	"encoding/binary"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -133,4 +135,36 @@ func TestImages(t *testing.T) {
 		}
 	}
 	t.Error("no cover art")
+}
+
+func TestSignatureImages(t *testing.T) {
+	// A file with a camera-like thumbnail box in udta, with a PNG after 4 bytes, as after a version and flags.
+	cover := summaryOf(t, "chapters_subs.m4a")
+	for _, sec := range cover.Sections {
+		if sec.Title == "Images" {
+			t.Errorf("chapters_subs.m4a has an Images section: %+v", sec.Rows)
+		}
+	}
+	src, err := os.ReadFile("../../testdata/chapters_subs.m4a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	png := src[bytes.Index(src, []byte("\x89PNG")):]
+	png = png[:bytes.Index(png, []byte("IEND"))+8]
+	box := func(typ string, payload ...[]byte) []byte {
+		b := binary.BigEndian.AppendUint32(nil, uint32(8+len(bytes.Join(payload, nil))))
+		return append(append(b, typ...), bytes.Join(payload, nil)...)
+	}
+	data := append(box("ftyp", []byte("isom\x00\x00\x00\x00isom")),
+		box("moov", box("udta", box("thmb", []byte{0, 0, 0, 0}, png)))...)
+	r := bytes.NewReader(data)
+	s := Of(boxview.Decode(r, int64(len(data)), ""), r)
+	want := fmt.Sprintf("PNG image, %d bytes", len(png))
+	if got := value(t, s, "Images", "moov/udta/thmb"); got != want {
+		t.Fatalf("thmb: %q, want %q", got, want)
+	}
+	img := s.Sections[len(s.Sections)-1].Rows[0].Image
+	if img == nil || img.Type != "image/png" || !bytes.Equal(data[img.Pos:img.Pos+img.Size], png) {
+		t.Errorf("thmb image: %+v", img)
+	}
 }
