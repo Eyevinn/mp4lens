@@ -58,6 +58,9 @@ var exampleFiles = []exampleFile{
 	{"cenc-init", "Encrypted init segment (cenc)", "init_cenc.cmfv", "init_cenc.cmfv", nil},
 	{"encrypted", "Encrypted media segment", "moof_enc.m4s", "moof_enc.m4s", nil},
 	{"av1", "AV1 init segment", "av1_init.mp4", "av1_init.mp4", nil},
+	{"hevc", "HEVC init segment with an SEI message in hvcC", "hvc1_init.mp4", "hvc1_init.mp4", nil},
+	{"mov", "QuickTime movie with AAC audio", "qt_h264_aac.mov", "qt_h264_aac.mov", nil},
+	{"mov-pcm", "QuickTime movie with 5.1 PCM audio", "qt_h264_lpcm.mov", "qt_h264_lpcm.mov", nil},
 	{"truncated", "Truncated init segment", "init_truncated.mp4", "init_truncated.mp4", nil},
 }
 

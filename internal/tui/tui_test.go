@@ -266,3 +266,25 @@ func TestNoMatchesAndEmptyFile(t *testing.T) {
 		t.Errorf("empty file:\n%s", s)
 	}
 }
+
+func TestLayoutAndQuickTime(t *testing.T) {
+	m := newModel(t, "qt_h264_aac.mov", nil, Options{Query: "type:mp4a"})
+	s := screen(m) + ansi.Strip(m.detail.GetContent())
+	for _, want := range []string{"QuickTime file", "QuickTime: QuickTime sound description version 1",
+		"Layout  16 fields as mp4ff reads them", "QuickTimeVersion       1  QT",
+		"QT SamplesPerPacket: QuickTime sound description field; not in ISOBMFF", "compression_id        -2  QT"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("screen lacks %q:\n%s", want, s)
+		}
+	}
+	m = newModel(t, "init.mp4", nil, Options{Query: "type:SPS"})
+	s = screen(m)
+	for _, want := range []string{"SPS  Sequence Parameter Set, in avcC", "✓ decoded part of avcC", "Width"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("screen lacks %q:\n%s", want, s)
+		}
+	}
+	if strings.Contains(s, "QuickTime") || strings.Contains(s, "Layout") {
+		t.Errorf("ISOBMFF part shows QuickTime or layout:\n%s", s)
+	}
+}

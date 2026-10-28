@@ -33,3 +33,9 @@ jobs:
         env:
           GOOS: js
           GOARCH: wasm
+
+      - name: Check that the field names match the mp4ff version
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          go generate ./internal/layout
+          git diff --exit-code internal/layout/names_gen.go

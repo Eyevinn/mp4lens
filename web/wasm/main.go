@@ -1,11 +1,12 @@
 //go:build js && wasm
 
 // Command wasm is the decoder of the mp4lens web page, built for GOOS=js and GOARCH=wasm. It runs in a Web
-// Worker and gives JavaScript two functions:
+// Worker and gives JavaScript three functions:
 //
 //   - mp4lensDecode(source, levels) decodes the box tree of source and returns it as JSON. The source is a
 //     Uint8Array, or a Blob, such as a File, that is read in slices with FileReaderSync.
 //   - mp4lensSearch(query) searches the last decoded tree and returns the keys of the matching boxes as JSON.
+//   - mp4lensLayout(key) returns the byte layout of the box with key in the last decoded tree as JSON.
 package main
 
 import (
@@ -16,6 +17,7 @@ import (
 	"syscall/js"
 
 	"github.com/Eyevinn/mp4lens/internal/boxview"
+	"github.com/Eyevinn/mp4lens/internal/layout"
 )
 
 // blobReader reads a JavaScript Blob, such as a File, with FileReaderSync.
@@ -109,6 +111,43 @@ func search(_ js.Value, args []js.Value) (ret any) {
 	return string(out)
 }
 
+type layoutResult struct {
+	Fields []layout.Field `json:"fields"`
+	Capped bool           `json:"capped,omitempty"`
+	Error  string         `json:"error,omitempty"`
+}
+
+func boxLayout(_ js.Value, args []js.Value) (ret any) {
+	defer func() {
+		if r := recover(); r != nil {
+			ret = errorJSON("error", fmt.Sprint("layout panic: ", r))
+		}
+	}()
+	if last.tree == nil {
+		return errorJSON("error", "no file has been decoded")
+	}
+	n := last.tree.ByKey(args[0].String())
+	if n == nil {
+		return errorJSON("error", "no box with key "+args[0].String())
+	}
+	res := last.tree.Layout(n, last.r)
+	lr := layoutResult{Fields: []layout.Field{}}
+	if res != nil {
+		lr.Capped = res.Capped
+		if res.Fields != nil {
+			lr.Fields = res.Fields
+		}
+		if res.Err != nil && !n.ChildErr {
+			lr.Error = res.Err.Error()
+		}
+	}
+	out, err := json.Marshal(lr)
+	if err != nil {
+		return errorJSON("error", err.Error())
+	}
+	return string(out)
+}
+
 func errorJSON(key, msg string) string {
 	out, _ := json.Marshal(map[string]string{key: msg})
 	return string(out)
@@ -117,5 +156,6 @@ func errorJSON(key, msg string) string {
 func main() {
 	js.Global().Set("mp4lensDecode", js.FuncOf(decode))
 	js.Global().Set("mp4lensSearch", js.FuncOf(search))
+	js.Global().Set("mp4lensLayout", js.FuncOf(boxLayout))
 	select {}
 }

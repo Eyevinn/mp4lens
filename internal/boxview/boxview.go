@@ -1,9 +1,11 @@
 // Package boxview prepares the box tree of an MP4 file for viewing. It decodes the tree with the boxtree
 // package of mp4ff, links each box to its parent, gives it a key and a long name, splits its Info lines into
-// fields, and searches the tree.
+// fields, adds the structures inside boxes, such as parameter sets, as parts, marks what is specific to
+// QuickTime, finds the byte layout of a box, and searches the tree.
 package boxview
 
 import (
+	"errors"
 	"io"
 	"regexp"
 	"strconv"
@@ -11,6 +13,8 @@ import (
 
 	"github.com/Eyevinn/mp4ff/boxtree"
 	"github.com/Eyevinn/mp4ff/mp4"
+
+	"github.com/Eyevinn/mp4lens/internal/parts"
 )
 
 // Tree is the box tree of a file.
@@ -23,6 +27,8 @@ type Tree struct {
 	Nodes []*Node
 	// ReadErr is the error that stopped the reading of the file, if any. The boxes before it are in the tree.
 	ReadErr error
+	// QuickTime tells why the file is a QuickTime file, or is empty if it is not one.
+	QuickTime string
 }
 
 // Node is a box in the tree.
@@ -36,6 +42,10 @@ type Node struct {
 	Children []*Node
 	// Depth is 0 for a top-level box, 1 for its children, and so on.
 	Depth int
+	// Part is the structure that the node is, for a node that is not a box but a part of its parent box.
+	Part *parts.Part
+	// QuickTime tells what is specific to QuickTime in the box or part, or is empty.
+	QuickTime string
 }
 
 // Field is a line of the Info output of a box, other than its first line.
@@ -52,27 +62,99 @@ type Field struct {
 // Info lines, as for mp4ff-info, for example "all:1".
 func Decode(r io.ReaderAt, size int64, infoLevels string) *Tree {
 	bt, err := boxtree.Decode(r, size, infoLevels)
-	t := New(bt)
+	t := New(bt, r)
 	t.ReadErr = err
 	return t
 }
 
-// New makes the tree of bt.
-func New(bt *boxtree.Tree) *Tree {
+// New makes the tree of bt. The parts of the boxes are read from r, the file, and left out if r is nil.
+func New(bt *boxtree.Tree, r io.ReaderAt) *Tree {
 	t := &Tree{Size: bt.Size}
-	t.Boxes = t.add(bt.Boxes, nil, "")
+	t.Boxes = t.add(bt.Boxes, nil, "", r)
+	t.QuickTime = fileQuickTime(t)
 	return t
 }
 
-func (t *Tree) add(nodes []*boxtree.Node, parent *Node, prefix string) []*Node {
+// maxPartsBox is the largest box whose parts are found.
+const maxPartsBox = 1 << 20
+
+func (t *Tree) add(nodes []*boxtree.Node, parent *Node, prefix string, r io.ReaderAt) []*Node {
 	out := make([]*Node, 0, len(nodes))
 	for i, bn := range nodes {
 		n := &Node{Node: bn, Key: prefix + strconv.Itoa(i), Parent: parent}
 		if parent != nil {
 			n.Depth = parent.Depth + 1
 		}
+		n.QuickTime = boxQuickTime(n)
 		t.Nodes = append(t.Nodes, n)
-		n.Children = t.add(bn.Children, n, n.Key+"/")
+		n.Children = t.add(bn.Children, n, n.Key+"/", r)
+		if ps := t.partsOf(n, r); len(ps) > 0 {
+			if (n.Err != nil || n.ChildErr) && ps[0].QuickTime != "" {
+				// mp4ff decodes a QuickTime user data text atom as a metadata item container, which fails
+				// on a child box that is not there. The text items replace those children.
+				n.Children, n.ChildErr, n.Err = nil, false, errQuickTimeText
+				t.dropAfter(n)
+			}
+			n.Children = append(n.Children, t.addParts(ps, n, len(n.Children))...)
+		}
+		out = append(out, n)
+	}
+	return out
+}
+
+// errQuickTimeText is the error of a QuickTime user data text atom, which mp4ff cannot decode.
+var errQuickTimeText = errors.New("mp4ff decodes this QuickTime user data text atom as a metadata item, and fails")
+
+// dropAfter removes the nodes after n from Nodes, which are its children when they have just been added.
+func (t *Tree) dropAfter(n *Node) {
+	for i := len(t.Nodes) - 1; i >= 0; i-- {
+		if t.Nodes[i] == n {
+			t.Nodes = t.Nodes[:i+1]
+			return
+		}
+	}
+}
+
+// partsOf returns the parts of the box of n, read from r.
+func (t *Tree) partsOf(n *Node, r io.ReaderAt) []*parts.Part {
+	if r == nil || n.HdrLen == 0 || n.Size > maxPartsBox || n.End() > uint64(t.Size) {
+		return nil
+	}
+	quickTimeText := n.QuickTime != "" && n.Parent != nil && n.Parent.Type == "udta"
+	if n.Box == nil && !quickTimeText {
+		return nil
+	}
+	data := make([]byte, n.Size)
+	if _, err := r.ReadAt(data, int64(n.Pos)); err != nil {
+		return nil
+	}
+	parentType := ""
+	if n.Parent != nil {
+		parentType = n.Parent.Type
+	}
+	return parts.Of(n.Type, n.Box, data, n.Pos, parentType)
+}
+
+// addParts makes nodes of the parts ps of the box or part parent, and adds them to Nodes. The first gets index
+// first among the children of parent.
+func (t *Tree) addParts(ps []*parts.Part, parent *Node, first int) []*Node {
+	out := make([]*Node, 0, len(ps))
+	for i, p := range ps {
+		bn := &boxtree.Node{Type: p.Name, Pos: p.Pos, Size: p.Size, Info: p.Info, Err: p.Err}
+		n := &Node{Node: bn, Key: parent.Key + "/" + strconv.Itoa(first+i), Parent: parent, Depth: parent.Depth + 1,
+			Part: p, QuickTime: p.QuickTime}
+		t.Nodes = append(t.Nodes, n)
+		n.Children = t.addParts(p.Children, n, 0)
+		for _, c := range n.Children {
+			if c.Err != nil || c.ChildErr {
+				n.ChildErr = true
+			}
+		}
+		if n.Err != nil || n.ChildErr {
+			for x := parent; x != nil && !x.ChildErr; x = x.Parent {
+				x.ChildErr = true
+			}
+		}
 		out = append(out, n)
 	}
 	return out
@@ -127,12 +209,28 @@ func (n *Node) End() uint64 {
 	return n.Pos + n.Size
 }
 
-// LongName returns the name of the box type, such as "Movie" for moov, or "" if it is not known.
+// Name returns the name of a part, such as "SPS", and otherwise the name of the box from the embedded node.
+func (n *Node) Name() string {
+	if n.Part != nil {
+		return n.Part.Name
+	}
+	return n.Node.Name()
+}
+
+// LongName returns the name of the box type, such as "Movie" for moov, or what a part is, or "" if it is not known.
 func (n *Node) LongName() string {
+	if n.Part != nil {
+		return n.Part.LongName
+	}
 	if n.HdrLen == 0 {
 		return ""
 	}
 	return boxNames[n.Type]
+}
+
+// IsBox tells if the node is a box, which may be bytes without a box header, and not a part of a box.
+func (n *Node) IsBox() bool {
+	return n.Part == nil
 }
 
 // Path returns the names of the boxes from the top-level box down to n, as "moov/trak/mdia".

@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/Eyevinn/mp4lens/internal/boxview"
+	"github.com/Eyevinn/mp4lens/internal/layout"
 )
 
 // Options are the settings of the user interface.
@@ -32,6 +33,9 @@ const allLevels = "all:1"
 
 // hexStart is the number of bytes of a box that the hex dump shows at first.
 const hexStart = 1024
+
+// layoutStart is the number of layout fields that the box pane shows at first.
+const layoutStart = 64
 
 // autoExpandLimit is the largest number of boxes for which the first two levels start expanded.
 const autoExpandLimit = 400
@@ -58,10 +62,14 @@ type Model struct {
 	cursor   int             // the selected row
 	top      int             // the first row in view
 
-	focus    pane
-	detail   viewport.Model
-	hexLimit int
-	showHelp bool
+	focus       pane
+	detail      viewport.Model
+	hexLimit    int
+	layoutLimit int
+	showHelp    bool
+
+	layoutNode *boxview.Node // the box of layoutRes
+	layoutRes  *layout.Result
 
 	input     textinput.Model
 	searching bool
@@ -85,7 +93,7 @@ type searchDoneMsg struct {
 // New decodes the file in the first size bytes of r and returns the user interface for it.
 func New(r io.ReaderAt, size int64, opts Options) *Model {
 	m := &Model{r: r, size: size, name: opts.Name, levels: opts.Levels, query: opts.Query, hexLimit: hexStart,
-		width: 100, height: 30}
+		layoutLimit: layoutStart, width: 100, height: 30}
 	m.input = textinput.New()
 	m.input.Prompt = "/"
 	m.input.Placeholder = "type:trun  trackID=1  @1234  hex:000001  is:error  (? for help)"
@@ -117,6 +125,7 @@ func (m *Model) setTree(t *boxview.Tree, keep bool) {
 	m.expanded = make(map[*boxview.Node]bool)
 	m.result, m.matched, m.onlyMatch = nil, nil, false
 	m.rows, m.cursor = nil, 0
+	m.layoutNode, m.layoutRes = nil, nil
 	var sel *boxview.Node
 	if keep {
 		for _, key := range expandedKeys {
@@ -244,7 +253,7 @@ func (m *Model) setCursor(i int) {
 	}
 	m.top = max(0, min(m.top, len(m.rows)-h))
 	if m.selected() != prev {
-		m.hexLimit = hexStart
+		m.hexLimit, m.layoutLimit = hexStart, layoutStart
 		m.updateDetail()
 		m.detail.GotoTop()
 	}
@@ -447,6 +456,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case "m":
 		m.hexLimit *= 4
+		m.layoutLimit *= 4
 		m.updateDetail()
 		return nil
 	case "tab", "shift+tab":
@@ -602,7 +612,13 @@ func (m *Model) View() tea.View {
 	var sb strings.Builder
 	sb.WriteString(m.titleLine())
 	sb.WriteByte('\n')
-	treeTitle := fmt.Sprintf(" Boxes %d ", len(m.tree.Nodes))
+	boxes := 0
+	for _, n := range m.tree.Nodes {
+		if n.IsBox() {
+			boxes++
+		}
+	}
+	treeTitle := fmt.Sprintf(" Boxes %d ", boxes)
 	if m.onlyMatch {
 		treeTitle = fmt.Sprintf(" Matching boxes %d ", len(m.result.Nodes))
 	}
@@ -633,6 +649,9 @@ func (m *Model) titleLine() string {
 		parts = append(parts, styleErr.Render("1 box could not be decoded"))
 	default:
 		parts = append(parts, styleErr.Render(fmt.Sprintf("%d boxes could not be decoded", n)))
+	}
+	if m.tree.QuickTime != "" {
+		parts = append(parts, styleQT.Render("QuickTime file"))
 	}
 	if m.levels != "" {
 		parts = append(parts, styleFaint.Render("fields: "+m.levels))
@@ -699,7 +718,11 @@ func (m *Model) treeLine(n *boxview.Node, width int, selected bool) string {
 	case n.ChildErr:
 		mark = " ○"
 	}
-	left := strings.Repeat("  ", n.Depth) + twisty + name + mark
+	qt := ""
+	if n.QuickTime != "" {
+		qt = " QT"
+	}
+	left := strings.Repeat("  ", n.Depth) + twisty + name + mark + qt
 	right := sizeText(n.Size) + " @" + strconv.FormatUint(n.Pos, 10)
 	if ansi.StringWidth(left)+1+ansi.StringWidth(right) > width {
 		right = sizeText(n.Size)
@@ -716,6 +739,9 @@ func (m *Model) treeLine(n *boxview.Node, width int, selected bool) string {
 		return st.Render(fit(left+strings.Repeat(" ", gap)+right, width))
 	}
 	nameStyle := styleBold
+	if n.Part != nil {
+		nameStyle = stylePart
+	}
 	switch {
 	case n.Err != nil:
 		nameStyle = styleErr.Bold(true)
@@ -727,7 +753,7 @@ func (m *Model) treeLine(n *boxview.Node, width int, selected bool) string {
 		markStyle = styleWarn
 	}
 	line := strings.Repeat("  ", n.Depth) + styleFaint.Render(twisty) + nameStyle.Render(name) + markStyle.Render(mark) +
-		strings.Repeat(" ", gap) + styleFaint.Render(right)
+		styleQT.Render(qt) + strings.Repeat(" ", gap) + styleFaint.Render(right)
 	return fit(line, width)
 }
 

@@ -40,6 +40,8 @@
   --b-c0: #f4f6f8;
   --b-c1: #e9eef3;
   --b-hit: #f2c94c;
+  --qt: #2f5bb7;
+  --qt-soft: #e3ebfa;
   --font-display: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
   --font-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -52,7 +54,7 @@
     --err: #ff7a70; --err-soft: #3a1a18; --warn: #f0b356; --warn-soft: #382a12; --ok: #6fcf94; --ok-soft: #143222;
     --match: #c99bf2; --match-soft: #2c2140;
     --b-size: #4a3412; --b-type: #123a48; --b-large: #553a10; --b-vf: #2e2645; --b-chdr: #1c3b27;
-    --b-c0: #182029; --b-c1: #1e2832; --b-hit: #8a6a12;
+    --b-c0: #182029; --b-c1: #1e2832; --b-hit: #8a6a12; --qt: #8fb0ff; --qt-soft: #1c2742;
     color-scheme: dark;
   }
 }
@@ -62,7 +64,7 @@
   --err: #ff7a70; --err-soft: #3a1a18; --warn: #f0b356; --warn-soft: #382a12; --ok: #6fcf94; --ok-soft: #143222;
   --match: #c99bf2; --match-soft: #2c2140;
   --b-size: #4a3412; --b-type: #123a48; --b-large: #553a10; --b-vf: #2e2645; --b-chdr: #1c3b27;
-  --b-c0: #182029; --b-c1: #1e2832; --b-hit: #8a6a12;
+  --b-c0: #182029; --b-c1: #1e2832; --b-hit: #8a6a12; --qt: #8fb0ff; --qt-soft: #1c2742;
   color-scheme: dark;
 }
 
@@ -163,6 +165,8 @@ button, select, input { font: inherit; color: inherit; }
 .cc { font-family: var(--font-mono); font-weight: 600; white-space: pre; }
 .row.err .cc { color: var(--err); }
 .row.match .cc { color: var(--match); background: var(--match-soft); border-radius: 3px; padding: 0 3px; margin: 0 -3px; }
+.row.part .cc { font-style: italic; font-weight: 500; }
+.qt { display: inline-block; flex: none; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; color: var(--qt); background: var(--qt-soft); border-radius: 3px; padding: 0 4px; line-height: 16px; }
 .row .size { margin-left: auto; color: var(--muted); font-size: 12.5px; }
 .row .pos { color: var(--faint); font-size: 12px; font-family: var(--font-mono); min-width: 4.5em; text-align: right; }
 .tree .empty { padding: 12px; color: var(--muted); font-style: italic; }
@@ -192,6 +196,8 @@ button, select, input { font: inherit; color: inherit; }
 .alert.err { background: var(--err-soft); }
 .alert.warn { background: var(--warn-soft); }
 .alert.muted { background: var(--hover); }
+.alert.qtnote { background: var(--qt-soft); }
+.alert.qtnote strong { color: var(--qt); }
 .alert strong { font-weight: 600; }
 .alert.err strong { color: var(--err); }
 .alert.warn strong { color: var(--warn); }
@@ -204,7 +210,20 @@ h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.07em; text-transform: u
 .fields .v { font-family: var(--font-mono); font-size: 12.5px; word-break: break-word; min-width: 0; }
 .fields .raw { grid-column: 1 / -1; font-family: var(--font-mono); font-size: 12.5px; white-space: pre-wrap; word-break: break-word; padding-left: calc(var(--i, 0) * 14px); }
 .fields mark { background: var(--b-hit); color: inherit; border-radius: 2px; }
+.fields .v .qt, .layout .qt { margin-left: 8px; vertical-align: 1px; cursor: help; }
+.fields .k.linked, .fields .v.linked { cursor: crosshair; }
 .none { color: var(--muted); font-style: italic; }
+h3 small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
+.layoutwrap { overflow: auto; max-height: 360px; border: 1px solid var(--line); border-radius: 6px; }
+.layout { border-collapse: collapse; font-family: var(--font-mono); font-size: 12px; width: 100%; font-variant-numeric: tabular-nums; }
+.layout th { position: sticky; top: 0; background: var(--panel); text-align: left; font-family: var(--font-body); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.layout td { padding: 2px 10px; white-space: nowrap; vertical-align: top; }
+.layout td.n { text-align: right; color: var(--muted); }
+.layout td.val { white-space: normal; word-break: break-all; min-width: 12em; }
+.layout td.noname { color: var(--faint); font-style: italic; }
+.layout tr:hover td, .layout tr.hot td { background: var(--accent-soft); }
+.layout tr.qtrow td.nm { color: var(--qt); }
+.morebar { margin-top: 6px; font-size: 12.5px; color: var(--muted); }
 
 .hexwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
 .hex { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; padding: 8px 12px; width: max-content; font-variant-numeric: tabular-nums; }
@@ -221,6 +240,7 @@ h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.07em; text-transform: u
 .b-c0 { background: var(--b-c0); cursor: pointer; }
 .b-c1 { background: var(--b-c1); cursor: pointer; }
 .hl span.b-hit, .legend i.b-hit { background: var(--b-hit); }
+.hl span.b-field { box-shadow: inset 0 -2px 0 var(--accent), inset 0 2px 0 var(--accent); }
 .hexbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; margin-top: 8px; font-size: 12.5px; color: var(--muted); min-height: 30px; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
@@ -391,6 +411,7 @@ async function callDecoder(msg) {
 }
 const decodeFile = (file, levels) => callDecoder({ type: "decode", fileId: file.id, source: file.blob, levels });
 const searchFile = (file, levels, query) => callDecoder({ type: "search", fileId: file.id, source: file.blob, levels, query });
+const layoutOf = (file, levels, key) => callDecoder({ type: "layout", fileId: file.id, source: file.blob, levels, key });
 
 /* ---------- state ---------- */
 const state = {
@@ -408,6 +429,8 @@ const state = {
   nextFileId: 1,
   search: null,      // { query, matches: [node], set: Set(key), hits: { key: [{pos, len}] }, capped }
   onlyMatches: false,
+  layout: null,      // { key, fields, capped, error } of the selected box
+  layoutLimit: 500,
 };
 
 function prepare(tree) {
@@ -427,6 +450,7 @@ function prepare(tree) {
   walk(tree.boxes || [], null, 0, "");
   state.tree = tree;
   state.nodes = nodes;
+  state.layout = null;
   state.byKey = new Map(nodes.map((n) => [n.key, n]));
   state.errors = nodes.filter((n) => n.error);
 }
@@ -463,6 +487,7 @@ async function loadFile(file, opts = {}) {
   prepare(tree);
   state.search = null;
   if (ms !== null) $("fileMeta").innerHTML += ` · decoded in ${ms < 10 ? ms.toFixed(1) : Math.round(ms)} ms`;
+  if (tree.quickTime) $("fileMeta").innerHTML += ` <span class="qt" title="${esc("QuickTime file: " + tree.quickTime)}">QuickTime</span>`;
   if (!opts.keepSelection) {
     state.expanded.clear();
     const small = state.nodes.length <= 400;
@@ -511,7 +536,9 @@ function renderSummary() {
   const readErr = state.tree.readError;
   if (!errs.length && !readErr) {
     s.className = "summary ok";
-    s.innerHTML = `<div class="headline"><span class="dot ok"></span>All ${fmtInt(state.nodes.length)} boxes decoded</div>`;
+    const nparts = state.nodes.filter((n) => n.part).length, nboxes = state.nodes.length - nparts;
+    s.innerHTML = `<div class="headline"><span class="dot ok"></span>All ${fmtInt(nboxes)} boxes` +
+      (nparts ? ` and ${fmtInt(nparts)} ${nparts === 1 ? "part" : "parts"}` : "") + ` decoded</div>`;
     return;
   }
   s.className = "summary bad";
@@ -635,12 +662,14 @@ function rowHtml(n) {
   if (n === state.selected) cls.push("sel");
   if (n.error) cls.push("err");
   if (state.search && state.search.set.has(n.key)) cls.push("match");
+  if (n.part) cls.push("part");
   const open = state.expanded.has(n.key) || (state.onlyMatches && state.search);
   const exp = n.children.length ? ` aria-expanded="${!!open}"` : "";
   const mark = n.error ? `<span class="dot err" title="Could not be decoded"></span>`
     : n.childError ? `<span class="dot warn" title="A box inside could not be decoded"></span>` : "";
   return `<div class="${cls.join(" ")}" role="treeitem" aria-level="${n.depth + 1}" aria-selected="${n === state.selected}"${exp} data-key="${esc(n.key)}" style="--d:${n.depth}">` +
     `<span class="tw"></span><span class="cc">${esc(n.type)}</span>${mark}` +
+    (n.quickTime ? `<span class="qt" title="${esc(n.quickTime)}">QT</span>` : "") +
     `<span class="size">${esc(fmtSize(n.size))}</span><span class="pos">@${fmtInt(n.pos)}</span></div>`;
 }
 function renderTree() {
@@ -742,6 +771,7 @@ function revealAndSelect(n) {
 function select(n, opts = {}) {
   state.selected = n;
   state.hexLimit = 2048;
+  state.layoutLimit = 500;
   renderTree();
   renderDetail();
   renderSearch();
@@ -757,12 +787,76 @@ function hitsIn(start, end) {
   }
   return out;
 }
-function renderFields(fields) {
-  if (!fields.length) return `<div class="none">No fields for this box.</div>`;
-  return `<div class="fields">` + fields.map((f) =>
-    f.key ? `<div class="k" style="--i:${f.indent || 0}">${esc(f.key)}</div><div class="v">${esc(f.value)}</div>`
-      : `<div class="raw" style="--i:${f.indent || 0}">${esc(f.value)}</div>`
-  ).join("") + `</div>`;
+// normalKey writes a field key in lower case without spaces and underscores, so that quickTimeVendor,
+// quicktime_vendor and QuickTimeVendor are the same.
+const normalKey = (k) => String(k).replace(/[ _]/g, "").toLowerCase();
+const baseName = (name) => String(name || "").replace(/ #\d+$/, "");
+// layoutFor returns the layout of n if it has been read.
+const layoutFor = (n) => (state.layout && state.layout.key === n.key ? state.layout : null);
+function renderFields(n) {
+  const fields = n.fields;
+  if (!fields.length) return `<div class="none">No fields for this ${n.part ? "part" : "box"}.</div>`;
+  const lay = layoutFor(n);
+  const qtNotes = new Map(), named = new Set();
+  if (lay) for (const f of lay.fields) {
+    named.add(normalKey(baseName(f.name)));
+    if (f.quickTime) qtNotes.set(normalKey(baseName(f.name)), f.quickTime);
+  }
+  return `<div class="fields">` + fields.map((f) => {
+    if (!f.key) return `<div class="raw" style="--i:${f.indent || 0}">${esc(f.value)}</div>`;
+    const nk = normalKey(f.key);
+    const note = qtNotes.get(nk) || (nk.startsWith("quicktime") ? "QuickTime field" : "");
+    const link = named.has(nk) ? ` linked" data-field="${esc(nk)}` : "";
+    return `<div class="k${link}" style="--i:${f.indent || 0}">${esc(f.key)}</div>` +
+      `<div class="v${link}">${esc(f.value)}${note ? `<span class="qt" title="${esc(note)}">QT</span>` : ""}</div>`;
+  }).join("") + `</div>`;
+}
+function renderLayout(n) {
+  const box = $("layoutBox");
+  if (!box) return;
+  const lay = layoutFor(n);
+  if (!lay) { box.innerHTML = `<h3>Layout</h3><div class="none">Reading the layout…</div>`; return; }
+  const rows = lay.fields.slice(0, state.layoutLimit).map((f, i) =>
+    `<tr data-li="${i}"${f.quickTime ? ` class="qtrow"` : ""}><td>${hex(f.pos, 8)}</td><td class="n">+${fmtInt(f.pos - n.pos)}</td>` +
+    `<td class="n">${fmtInt(f.size)}</td><td>${esc(f.kind)}</td>` +
+    (f.name ? `<td class="nm">${esc(f.name)}</td>` : `<td class="noname">no name</td>`) +
+    `<td class="val">${esc(f.value)}${f.quickTime ? `<span class="qt" title="${esc(f.quickTime)}">QT</span>` : ""}</td></tr>`
+  ).join("");
+  let html = `<h3>Layout<small>${fmtInt(lay.fields.length)} fields as mp4ff reads them${lay.capped ? ", more not recorded" : ""}</small></h3>`;
+  if (lay.error) html += `<div class="alert err"><strong>The decoder stopped</strong><code>${esc(lay.error)}</code></div>`;
+  html += lay.fields.length
+    ? `<div class="layoutwrap"><table class="layout"><thead><tr><th>Position</th><th>Offset</th><th>Size</th><th>Kind</th><th>Name</th><th>Value</th></tr></thead><tbody>${rows}</tbody></table></div>`
+    : `<div class="none">No fields.</div>`;
+  if (lay.fields.length > state.layoutLimit) {
+    html += `<div class="morebar">Showing ${fmtInt(state.layoutLimit)} of ${fmtInt(lay.fields.length)} fields · <button type="button" class="btn" id="moreLayout">Show all</button></div>`;
+  }
+  box.innerHTML = html;
+}
+// loadLayout reads the layout of n, a box, and then shows it with the fields that it tags.
+async function loadLayout(n) {
+  if (n.part || !n.hdrLen || layoutFor(n)) return;
+  const token = state.token;
+  let lay;
+  try {
+    ({ data: lay } = await layoutOf(state.file, state.levels, n.key));
+  } catch (e) {
+    lay = { fields: [], error: e.message };
+  }
+  if (token !== state.token || state.selected !== n) return;
+  state.layout = { key: n.key, fields: lay.fields || [], capped: !!lay.capped, error: lay.error || "" };
+  renderLayout(n);
+  $("fieldsBox").innerHTML = renderFields(n);
+}
+// markField marks the bytes from pos, of len bytes, in the hex view, or clears the marks if len is 0.
+function markField(pos, len) {
+  const n = state.selected;
+  for (const s of document.querySelectorAll("#hex span.b-field")) s.classList.remove("b-field");
+  if (!len) return;
+  const start = pos - n.pos, end = start + len;
+  for (const s of document.querySelectorAll("#hex span[data-i]")) {
+    const i = Number(s.dataset.i);
+    if (i >= start && i < end) s.classList.add("b-field");
+  }
 }
 function renderDetail() {
   const d = $("detail");
@@ -773,22 +867,25 @@ function renderDetail() {
   const crumbs = `<nav class="crumbs" aria-label="Box path"><button type="button" data-key="">${esc(state.file.name)}</button>` +
     chain.map((x) => `<span class="sep">›</span><button type="button" data-key="${esc(x.key)}">${esc(x.type)}</button>`).join("") + `</nav>`;
   const status = n.error ? `<span class="pill err">Could not be decoded</span>`
-    : n.childError ? `<span class="pill warn">Error in a box inside</span>`
+    : n.childError ? `<span class="pill warn">Error ${n.part ? "inside" : "in a box inside"}</span>`
+    : n.part ? `<span class="pill ok">Decoded part of ${esc(n.parent.type)}</span>`
     : n.unknown ? `<span class="pill muted">Unknown box type</span>`
     : n.hdrLen === 0 ? `<span class="pill warn">No box header</span>`
     : `<span class="pill ok">Decoded</span>`;
-  const long = n.hdrLen === 0 ? "Bytes without a box header" : (n.name ? n.name + " box" : "");
+  const long = n.part ? n.name : n.hdrLen === 0 ? "Bytes without a box header" : (n.name ? n.name + " box" : "");
+  const boxKids = n.children.filter((c) => !c.part), partKids = n.children.length - boxKids.length;
   const hasVF = n.version !== undefined;
   const fileEnd = state.tree.size;
   const end = n.pos + n.size;
   const facts = [
     ["Position", `${fmtInt(n.pos)} <small>${hex(n.pos)}</small>`],
     ["Size", `${fmtInt(n.size)} <small>${n.size >= 1024 ? esc(fmtSize(n.size)) : "bytes"}</small>`],
-    ["Header", n.hdrLen ? `${n.hdrLen} bytes${n.hdrLen === 16 ? " <small>64-bit size</small>" : ""}` : "none"],
-    ["Ends at", `${fmtInt(end)} <small>${hex(end)}</small>`],
   ];
+  if (!n.part) facts.push(["Header", n.hdrLen ? `${n.hdrLen} bytes${n.hdrLen === 16 ? " <small>64-bit size</small>" : ""}` : "none"]);
+  facts.push(["Ends at", `${fmtInt(end)} <small>${hex(end)}</small>`]);
   if (hasVF) facts.push(["Version · flags", `${n.version} · ${esc(n.flags)}`]);
-  if (n.children.length) facts.push(["Child boxes", fmtInt(n.children.length)]);
+  if (boxKids.length) facts.push(["Child boxes", fmtInt(boxKids.length)]);
+  if (partKids) facts.push(["Parts", fmtInt(partKids)]);
 
   let alerts = "";
   if (n.error) alerts += `<div class="alert err" role="alert"><strong>Decode error</strong><code>${esc(n.error)}</code></div>`;
@@ -800,21 +897,25 @@ function renderDetail() {
   }
   if (end > fileEnd) alerts += `<div class="alert warn"><strong>Truncated</strong><div>The box continues ${fmtInt(end - fileEnd)} bytes past the end of the file.</div></div>`;
   if (n.unknown) alerts += `<div class="alert muted"><div>mp4ff does not know this box type, so only its header is decoded.</div></div>`;
+  if (n.quickTime) alerts += `<div class="alert qtnote"><strong>QuickTime</strong><div>${esc(n.quickTime)}</div></div>`;
 
   d.innerHTML = crumbs +
     `<div class="head"><h2>${esc(n.type)}</h2>${long ? `<span class="long">${esc(long)}</span>` : ""}${status}</div>` +
     `<dl class="facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>` +
     alerts +
-    `<section><h3>Fields</h3>${renderFields(n.fields)}</section>` +
+    `<section><h3>Fields</h3><div id="fieldsBox">${renderFields(n)}</div></section>` +
+    (n.part || !n.hdrLen ? "" : `<section id="layoutBox"></section>`) +
     `<section><h3>Bytes</h3><div class="hexwrap"><div class="hex" id="hex">Reading…</div></div>` +
     `<div class="hexbar"><div class="legend">` +
     `<span><i class="b-size"></i>size</span><span><i class="b-type"></i>type</span>` +
     (n.hdrLen === 16 ? `<span><i class="b-large"></i>64-bit size</span>` : "") +
     (hasVF ? `<span><i class="b-vf"></i>version · flags</span>` : "") +
-    (n.children.length ? `<span><i class="b-chdr"></i>child box header</span><span><i class="b-c1"></i>child box</span>` : "") +
+    (boxKids.length ? `<span><i class="b-chdr"></i>child box header</span><span><i class="b-c1"></i>child box</span>` : "") +
     (hitsIn(n.pos, end).length ? `<span><i class="b-hit"></i>search hit</span>` : "") +
     `</div><span id="hexHover"></span><span id="hexMore"></span></div></section>`;
   renderHex(n);
+  renderLayout(n);
+  loadLayout(n);
 }
 $("detail").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-key]");
@@ -825,6 +926,7 @@ $("detail").addEventListener("click", (e) => {
   }
   const more = e.target.closest("#showMore");
   if (more) { state.hexLimit *= 4; renderHex(state.selected); return; }
+  if (e.target.closest("#moreLayout")) { state.layoutLimit = Infinity; renderLayout(state.selected); return; }
   const byte = e.target.closest("span[data-c]");
   if (byte) revealAndSelect(state.selected.children[Number(byte.dataset.c)]);
 });
@@ -836,7 +938,8 @@ async function renderHex(n) {
   const count = Math.min(avail, state.hexLimit);
   const bytes = new Uint8Array(await state.file.blob.slice(n.pos, n.pos + count).arrayBuffer());
   if (renderHex.current !== token || !$("hex")) return;
-  const kids = n.children.map((c, i) => ({ s: c.pos - n.pos, e: c.pos - n.pos + c.size, h: c.hdrLen, i }));
+  const kids = n.children.map((c, i) => ({ s: c.pos - n.pos, e: c.pos - n.pos + c.size, h: c.hdrLen, i, part: !!c.part }))
+    .filter((k) => !k.part);
   const hits = hitsIn(n.pos, n.pos + count).map((h) => ({ s: h.pos - n.pos, e: h.pos - n.pos + h.len }));
   const hasVF = n.version !== undefined;
   const cls = (i) => {
@@ -875,18 +978,44 @@ async function renderHex(n) {
   }
 }
 $("detail").addEventListener("mouseover", (e) => {
+  const n = state.selected;
+  const row = e.target.closest(".layout tr[data-li]");
+  if (row) {
+    const f = layoutFor(n).fields[Number(row.dataset.li)];
+    markField(f.pos, f.size);
+    return;
+  }
+  const fieldEl = e.target.closest("[data-field]");
+  if (fieldEl) {
+    const lay = layoutFor(n);
+    const f = lay && lay.fields.find((x) => normalKey(baseName(x.name)) === fieldEl.dataset.field);
+    if (f) markField(f.pos, f.size);
+    return;
+  }
   const s = e.target.closest("span[data-i]");
   const out = $("hexHover");
   if (!out) return;
-  if (!s) { out.textContent = ""; return; }
-  const n = state.selected, i = Number(s.dataset.i), abs = n.pos + i;
+  for (const r of document.querySelectorAll(".layout tr.hot")) r.classList.remove("hot");
+  if (!s) { out.textContent = ""; markField(0, 0); return; }
+  const i = Number(s.dataset.i), abs = n.pos + i;
   let what = `${n.type} +${i}`;
   if (s.dataset.c !== undefined) {
     const c = n.children[Number(s.dataset.c)];
     what = `${c.type} +${abs - c.pos} (click to open)`;
+  } else {
+    const lay = layoutFor(n);
+    const li = lay ? lay.fields.findIndex((f) => abs >= f.pos && abs < f.pos + f.size) : -1;
+    if (li >= 0) {
+      const f = lay.fields[li];
+      what = `${f.name || "field without a name"} · ${f.kind} · ${f.value}`;
+      markField(f.pos, f.size);
+      const tr = document.querySelector(`.layout tr[data-li="${li}"]`);
+      if (tr) tr.classList.add("hot");
+    }
   }
   out.textContent = `${hex(abs)} · ${fmtInt(abs)} · ${what}`;
 });
+$("detail").addEventListener("mouseleave", () => markField(0, 0));
 
 /* ---------- controls ---------- */
 $("exampleSelect").innerHTML = `<option value="">Examples…</option>` +

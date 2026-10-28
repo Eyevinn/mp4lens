@@ -7,3 +7,4 @@ web/site/
 # Binaries built with go build
 /mp4lens
 *.test
+/cmd/mp4lens/mp4lens

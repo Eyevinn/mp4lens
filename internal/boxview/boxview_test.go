@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -45,8 +46,8 @@ func TestTree(t *testing.T) {
 	if tr.ReadErr != nil {
 		t.Fatal(tr.ReadErr)
 	}
-	if len(tr.Boxes) != 3 || len(tr.Nodes) != 24 {
-		t.Fatalf("got %d top-level boxes and %d boxes, want 3 and 24", len(tr.Boxes), len(tr.Nodes))
+	if len(tr.Boxes) != 3 || len(tr.Nodes) != 26 { // 24 boxes, and the SPS and PPS of avcC
+		t.Fatalf("got %d top-level boxes and %d nodes, want 3 and 26", len(tr.Boxes), len(tr.Nodes))
 	}
 	stsz := byPath(t, tr, "moov/trak/mdia/minf/stbl/stsz")
 	if stsz.Key != "2/1/1/2/2/3" || stsz.Depth != 5 || stsz.Pos != 639 || stsz.Parent.Name() != "stbl" {
@@ -310,5 +311,76 @@ func TestTokenize(t *testing.T) {
 	want := []string{"a", "b c", "hex:00 01d", "", "e"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("tokenize = %q, want %q", got, want)
+	}
+}
+
+func TestParts(t *testing.T) {
+	tr, r := decodeFile(t, "init.mp4", nil)
+	sps := byPath(t, tr, "moov/trak/mdia/minf/stbl/stsd/avc1/avcC/SPS")
+	if sps.IsBox() || sps.LongName() != "Sequence Parameter Set" || sps.Key != "2/1/1/2/2/0/0/0/0" {
+		t.Errorf("SPS: box=%t name=%q key=%s", sps.IsBox(), sps.LongName(), sps.Key)
+	}
+	if got := tr.At(sps.Pos + 3); got != sps {
+		t.Errorf("At in SPS = %v", got.Path())
+	}
+	if tr.Layout(sps, r) != nil {
+		t.Error("a part has a layout")
+	}
+	q, _ := ParseQuery("is:part Width=640")
+	res, _ := tr.Search(q, r)
+	if len(res.Nodes) != 1 || res.Nodes[0] != sps {
+		t.Errorf("search: %v", res.Nodes)
+	}
+}
+
+func TestQuickTime(t *testing.T) {
+	tr, r := decodeFile(t, "qt_h264_aac.mov", nil)
+	if tr.QuickTime != "the major brand is qt" {
+		t.Errorf("file: %q", tr.QuickTime)
+	}
+	q, _ := ParseQuery("is:quicktime")
+	res, _ := tr.Search(q, r)
+	var got []string
+	for _, n := range res.Nodes {
+		got = append(got, n.Name())
+	}
+	want := `ftyp wide hdlr hdlr avc1 hdlr hdlr mp4a wave \x00\x00\x00\x00 chan ©nam text ©swr text`
+	if strings.Join(got, " ") != want {
+		t.Errorf("QuickTime boxes:\n got %s\nwant %s", strings.Join(got, " "), want)
+	}
+	nam := byPath(t, tr, "moov/udta/©nam")
+	if nam.Err != errQuickTimeText || len(nam.Children) != 1 || nam.Children[0].Name() != "text" {
+		t.Errorf("©nam: err=%v children=%d", nam.Err, len(nam.Children))
+	}
+	for _, n := range tr.Nodes {
+		for p := n.Parent; p != nil; p = p.Parent {
+			if p == nam && n.IsBox() {
+				t.Errorf("box %s left under ©nam", n.Path())
+			}
+		}
+	}
+
+	iso, r2 := decodeFile(t, "prog_8s.mp4", nil)
+	res, _ = iso.Search(q, r2)
+	if iso.QuickTime != "" || len(res.Nodes) != 0 {
+		t.Errorf("ISOBMFF file: %q %v", iso.QuickTime, res.Nodes)
+	}
+}
+
+func TestLayout(t *testing.T) {
+	tr, r := decodeFile(t, "init.mp4", nil)
+	tkhd := byPath(t, tr, "moov/trak/tkhd")
+	res := tr.Layout(tkhd, r)
+	if res == nil || res.Err != nil || len(res.Fields) != 24 || res.Fields[5].Name != "TrackID" {
+		t.Fatalf("tkhd layout: %+v", res)
+	}
+	moov := byPath(t, tr, "moov")
+	if res := tr.Layout(moov, r); len(res.Fields) != 2 {
+		t.Errorf("moov layout has %d fields", len(res.Fields))
+	}
+	seg, r2 := decodeFile(t, "1.m4s", nil)
+	mdat := byPath(t, seg, "mdat")
+	if res := seg.Layout(mdat, r2); len(res.Fields) != 2 || res.Fields[0].Value != strconv.FormatUint(mdat.Size, 10) {
+		t.Errorf("mdat layout: %+v", res)
 	}
 }

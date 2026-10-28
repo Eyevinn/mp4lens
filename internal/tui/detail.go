@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/Eyevinn/mp4lens/internal/boxview"
+	"github.com/Eyevinn/mp4lens/internal/layout"
 )
 
 // The styles use the 16 ANSI colors, so that they follow the color theme of the terminal.
@@ -25,6 +26,8 @@ var (
 	styleSelBlur     = lipgloss.NewStyle().Underline(true).Bold(true)
 	styleBorder      = lipgloss.NewStyle().Faint(true)
 	styleBorderFocus = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+	styleQT          = lipgloss.NewStyle().Foreground(lipgloss.Color("4")).Bold(true)
+	stylePart        = lipgloss.NewStyle().Italic(true)
 
 	styleHexSize  = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	styleHexType  = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
@@ -43,7 +46,10 @@ func (m *Model) detailContent(n *boxview.Node, width int) string {
 
 	add(styleFaint.Render(strings.ReplaceAll(n.Path(), "/", " › ")))
 	head := styleTitle.Render(n.Name())
-	if ln := n.LongName(); ln != "" {
+	switch ln := n.LongName(); {
+	case n.Part != nil:
+		head += "  " + ln + styleFaint.Render(", in "+n.Parent.Name())
+	case ln != "":
 		head += "  " + ln + " box"
 	}
 	add(head, m.statusText(n), "")
@@ -52,15 +58,31 @@ func (m *Model) detailContent(n *boxview.Node, width int) string {
 		{"Position", fmt.Sprintf("%d (%#x)", n.Pos, n.Pos)},
 		{"Size", byteCount(n.Size)},
 		{"Ends at", fmt.Sprintf("%d (%#x)", n.End(), n.End())},
-		{"Header", headerText(n)},
+	}
+	if n.IsBox() {
+		facts = append(facts, [2]string{"Header", headerText(n)})
 	}
 	if v, f, ok := n.VersionFlags(); ok {
 		facts = append(facts, [2]string{"Version", fmt.Sprint(v)}, [2]string{"Flags", fmt.Sprintf("%06x", f)})
 	}
-	if len(n.Children) > 0 {
-		facts = append(facts, [2]string{"Child boxes", fmt.Sprint(len(n.Children))})
+	boxes, nparts := 0, 0
+	for _, c := range n.Children {
+		if c.IsBox() {
+			boxes++
+		} else {
+			nparts++
+		}
+	}
+	if boxes > 0 {
+		facts = append(facts, [2]string{"Child boxes", fmt.Sprint(boxes)})
+	}
+	if nparts > 0 {
+		facts = append(facts, [2]string{"Parts", fmt.Sprint(nparts)})
 	}
 	add(factLines(facts, width)...)
+	if n.QuickTime != "" {
+		add("", styleQT.Render("QuickTime: ")+n.QuickTime)
+	}
 
 	if n.Err != nil {
 		add("", styleErr.Render("Error: ")+n.Err.Error())
@@ -75,8 +97,13 @@ func (m *Model) detailContent(n *boxview.Node, width int) string {
 		add("", styleFaint.Render("mp4ff does not know this box type, so only its header is decoded."))
 	}
 
+	res := m.layoutOf(n)
 	add("", styleHead.Render("Fields"))
-	add(fieldLines(n.Fields())...)
+	add(fieldLines(n.Fields(), quickTimeKeys(res))...)
+	if res != nil {
+		add("")
+		add(m.layoutLines(n, res)...)
+	}
 	add("")
 	add(m.hexLines(n, width)...)
 	return strings.Join(lines, "\n")
@@ -84,6 +111,8 @@ func (m *Model) detailContent(n *boxview.Node, width int) string {
 
 func (m *Model) statusText(n *boxview.Node) string {
 	switch {
+	case n.Part != nil && n.Err == nil && !n.ChildErr:
+		return styleOK.Render("✓ decoded part of " + n.Parent.Name())
 	case n.Err != nil:
 		return styleErr.Render("● could not be decoded")
 	case n.ChildErr:
@@ -150,7 +179,9 @@ func factLines(facts [][2]string, width int) []string {
 	return lines
 }
 
-func fieldLines(fields []boxview.Field) []string {
+// fieldLines lays out the fields, with a QT tag after those whose keys, in lower case without spaces and
+// underscores, start with "quicktime" or are in qtKeys.
+func fieldLines(fields []boxview.Field, qtKeys map[string]bool) []string {
 	if len(fields) == 0 {
 		return []string{styleFaint.Render("No fields")}
 	}
@@ -166,7 +197,11 @@ func fieldLines(fields []boxview.Field) []string {
 			continue
 		}
 		key := indent + f.Key
-		lines = append(lines, styleFaint.Render(key)+strings.Repeat(" ", max(1, keyW+2-ansi.StringWidth(key)))+f.Value)
+		line := styleFaint.Render(key) + strings.Repeat(" ", max(1, keyW+2-ansi.StringWidth(key))) + f.Value
+		if nk := normalKey(f.Key); strings.HasPrefix(nk, "quicktime") || qtKeys[nk] {
+			line += "  " + styleQT.Render("QT")
+		}
+		lines = append(lines, line)
 	}
 	return lines
 }
@@ -219,6 +254,9 @@ func (m *Model) hexLines(n *boxview.Node, width int) []string {
 		}
 	}
 	for _, c := range n.Children {
+		if !c.IsBox() {
+			continue
+		}
 		start := int(c.Pos - n.Pos)
 		for i := start; i < min(start+max(8, c.HdrLen), len(buf)); i++ {
 			kinds[i] = kindChild
@@ -297,8 +335,11 @@ func hexLegend(n *boxview.Node) string {
 	if _, _, ok := n.VersionFlags(); ok {
 		parts = append(parts, styleHexVF.Render("version+flags"))
 	}
-	if len(n.Children) > 0 {
-		parts = append(parts, styleHexChild.Render("child box header"))
+	for _, c := range n.Children {
+		if c.IsBox() {
+			parts = append(parts, styleHexChild.Render("child box header"))
+			break
+		}
 	}
 	return strings.Join(parts, "  ")
 }
@@ -318,7 +359,7 @@ func helpText() string {
 		{"f", "show only the matching boxes"},
 		{"e E", "next and previous box that could not be decoded"},
 		{"a", "switch between the main fields and all fields, such as all samples"},
-		{"m", "show more bytes"},
+		{"m", "show more bytes and layout fields"},
 		{"esc", "close the help, or clear the search"},
 		{"q", "quit"},
 	}
@@ -329,4 +370,77 @@ func helpText() string {
 	}
 	sb.WriteString("\n" + styleHead.Render("Search") + "\n" + boxview.QueryHelp + "\n")
 	return sb.String()
+}
+
+// layoutOf returns the layout of n, and keeps it for the next call.
+func (m *Model) layoutOf(n *boxview.Node) *layout.Result {
+	if m.layoutNode != n {
+		m.layoutNode, m.layoutRes = n, m.tree.Layout(n, m.r)
+	}
+	return m.layoutRes
+}
+
+// maxLayoutName is the widest that the name column of the layout gets.
+const maxLayoutName = 26
+
+// layoutLines lays out the fields of res, the layout of n: the file position in hex, the offset in the box, the
+// size, the kind of read, the name and the value, with a QT tag for QuickTime fields, whose notes follow.
+func (m *Model) layoutLines(n *boxview.Node, res *layout.Result) []string {
+	title := styleHead.Render("Layout") + styleFaint.Render(fmt.Sprintf("  %d fields as mp4ff reads them", len(res.Fields)))
+	if res.Capped {
+		title += styleFaint.Render(", more not recorded")
+	}
+	lines := []string{title}
+	if res.Err != nil && !n.ChildErr {
+		lines = append(lines, styleErr.Render("The decoder stopped: ")+res.Err.Error())
+	}
+	nameW := 4
+	for _, f := range res.Fields {
+		nameW = max(nameW, min(maxLayoutName, ansi.StringWidth(f.Name)))
+	}
+	var notes []string
+	seen := map[string]bool{}
+	for i, f := range res.Fields {
+		if i == m.layoutLimit {
+			lines = append(lines, styleFaint.Render(fmt.Sprintf("%d more fields. Press m for more.", len(res.Fields)-i)))
+			break
+		}
+		name := f.Name
+		if name == "" {
+			name = styleFaint.Render("(no name)")
+		}
+		line := styleFaint.Render(fmt.Sprintf("%08x +%-5d %5d %-6s ", f.Pos, f.Pos-n.Pos, f.Size, f.Kind)) +
+			name + strings.Repeat(" ", max(1, nameW+1-ansi.StringWidth(name))) + f.Value
+		if f.QuickTime != "" {
+			line += "  " + styleQT.Render("QT")
+			if !seen[f.QuickTime] {
+				seen[f.QuickTime] = true
+				notes = append(notes, styleQT.Render("QT ")+f.Name+": "+f.QuickTime)
+			}
+		}
+		lines = append(lines, line)
+	}
+	return append(lines, notes...)
+}
+
+// quickTimeKeys returns the names of the QuickTime fields of res, as normalKey writes them, without the
+// number of a repeated field.
+func quickTimeKeys(res *layout.Result) map[string]bool {
+	keys := map[string]bool{}
+	if res == nil {
+		return keys
+	}
+	for _, f := range res.Fields {
+		if f.QuickTime != "" {
+			name, _, _ := strings.Cut(f.Name, " #")
+			keys[normalKey(name)] = true
+		}
+	}
+	return keys
+}
+
+// normalKey returns key in lower case without spaces and underscores, so that "quickTimeVendor",
+// "quicktime_vendor" and "QuickTimeVendor" are the same.
+func normalKey(key string) string {
+	return strings.ToLower(strings.NewReplacer(" ", "", "_", "").Replace(key))
 }

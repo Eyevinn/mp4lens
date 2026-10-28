@@ -3,4 +3,6 @@ skip = ./.venv,./web/site,testdata,*/testdata/*,*.mp4,*.m4s,go.sum
 # ISOBMFF box names that codespell mistakes for misspellings.
 #   trun - Track Fragment Run box
 #   nam  - the iTunes (c)nam metadata atom
-ignore-words-list = trun,nam
+#   fiel - Field Ordering (QuickTime) box
+#   alis - Alias data reference entry (QuickTime)
+ignore-words-list = trun,nam,fiel,alis

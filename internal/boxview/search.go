@@ -24,6 +24,8 @@ const QueryHelp = `A box matches a query when it matches all its terms. A term i
   is:error       the box could not be decoded
   is:unknown     mp4ff does not know the box type
   is:truncated   the box continues past the end of the file
+  is:quicktime   the box, or one of its fields, is specific to QuickTime
+  is:part        a structure inside a box, such as an SPS or a descriptor
 
 Put "-" before a term to match the boxes that do not match it, and quotes around text with spaces.`
 
@@ -174,7 +176,7 @@ func (t *term) parseSize(op, v string) error {
 		">=": func(a, b uint64) bool { return a >= b },
 		"=":  func(a, b uint64) bool { return a == b },
 	}[op]
-	t.match = func(_ *Tree, n *Node) bool { return n.HdrLen > 0 && cmp(n.Size, size) }
+	t.match = func(_ *Tree, n *Node) bool { return (n.HdrLen > 0 || n.Part != nil) && cmp(n.Size, size) }
 	return nil
 }
 
@@ -196,8 +198,12 @@ func (t *term) parseIs(v string) error {
 		t.match = func(_ *Tree, n *Node) bool { return n.Unknown() }
 	case "truncated":
 		t.match = func(tr *Tree, n *Node) bool { return n.Truncated(tr.Size) }
+	case "quicktime":
+		t.match = func(_ *Tree, n *Node) bool { return hasQuickTime(n) }
+	case "part":
+		t.match = func(_ *Tree, n *Node) bool { return n.Part != nil }
 	default:
-		return fmt.Errorf("unknown is:%s, use is:error, is:unknown or is:truncated", v)
+		return fmt.Errorf("unknown is:%s, use is:error, is:unknown, is:truncated, is:quicktime or is:part", v)
 	}
 	return nil
 }
