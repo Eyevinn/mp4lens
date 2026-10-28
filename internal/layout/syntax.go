@@ -352,6 +352,13 @@ var syntaxes = map[string]boxSyntax{
 		"n":     {"font-name-length", "length of the font name that follows", nil},
 		"Name":  {"font", "font names in order of preference; Serif, Sans-serif and Monospace are generic", nil},
 	}},
+	"chpl": {spec: "Nero chapter list, with no published specification", fields: map[string]fieldSyntax{
+		"Reserved": {"reserved", "4 bytes that Nero, ffmpeg and GPAC write as 0", nil},
+		"count":    {"chapter count", "number of chapters that follow", nil},
+		"start":    {"start time", "start of the chapter, in units of 100 ns", showHundredNanoseconds},
+		"n":        {"title length", "length of the title that follows", nil},
+		"Title":    {"title", "title of the chapter, in UTF-8", nil},
+	}},
 	// iTunes metadata: the mean and name of a freeform item ----.
 	"mean": {spec: iTunesFreeform, fields: map[string]fieldSyntax{
 		"Domain": {"mean", "domain of the name of the item, in reverse DNS notation, such as com.apple.iTunes", nil},
@@ -373,6 +380,11 @@ var dataTypes = map[uint64]string{
 	0: "implicit", 1: "UTF-8", 2: "UTF-16", 4: "UTF-8 sort", 5: "UTF-16 sort", 13: "JPEG", 14: "PNG",
 	21: "signed integer", 22: "unsigned integer", 23: "32-bit float", 24: "64-bit float", 27: "BMP",
 	28: "QuickTime metadata atom",
+}
+
+// showHundredNanoseconds writes a time in units of 100 ns as a duration.
+func showHundredNanoseconds(v uint64) string {
+	return (time.Duration(v) * 100).String()
 }
 
 // showInt8 writes a signed 8-bit value that was read as unsigned, if it is negative.

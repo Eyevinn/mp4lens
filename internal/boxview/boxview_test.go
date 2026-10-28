@@ -463,6 +463,10 @@ func TestTextTracksAndItems(t *testing.T) {
 	if gmhdText := byPath(t, tr, "moov/trak/mdia/minf/gmhd/text"); !strings.HasPrefix(gmhdText.QuickTime, "Undocumented") {
 		t.Errorf("gmhd text: QuickTime %q", gmhdText.QuickTime)
 	}
+	chpl := tr.Layout(byPath(t, tr, "moov/udta/chpl"), r)
+	if f := chpl.Fields[len(chpl.Fields)-3]; f.Spec != "start time[2]" || f.Value != "5000000 (500ms)" {
+		t.Errorf("chpl start of chapter 2: %+v", f)
+	}
 	for path, want := range map[string]string{
 		"moov/udta/meta/ilst/trkn/data": "(track 5 of 13)",
 		"moov/udta/meta/ilst/©nam/data": `("Chapters")`,
