@@ -153,6 +153,21 @@ ffmpeg from its test sources.
 `MP4LENS_CORPUS=files.txt go test -count=1 ./internal/boxview -run TestCorpus -v` decodes the files listed in
 `files.txt`, finds the layout of every box, and reports panics and how many layout bytes have names.
 
+## Related tools
+
+Other tools that show the boxes of MP4 files:
+
+- [MP4Box.js][mp4boxjs] from GPAC has a [file inspection page][mp4boxjs-filereader] with the box tree and
+  fields, views of where the bytes of the file go, and tables of the samples, items and segment index
+- [MP4Inspector][mp4inspector] from Bitmovin is a Chrome DevTools extension that shows the boxes of the segments
+  that a web page loads, and compares two segments box by box
+- [ISO Viewer][isoviewer] is a desktop application built on the Java library [mp4parser][mp4parser]
+- [fq][fq] decodes MP4 among many other binary formats, with jq queries, an interactive prompt and a hex view
+  next to the decoded values
+
+mp4lens decodes with mp4ff, so it shows the boxes as programs built on mp4ff see them, and its box tree can be
+browsed in a terminal as well as in the browser.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
@@ -160,3 +175,9 @@ MIT, see [LICENSE](LICENSE).
 [mp4ff]: https://github.com/Eyevinn/mp4ff
 [boxtree]: https://github.com/Eyevinn/mp4ff/tree/master/boxtree
 [bubbletea]: https://github.com/charmbracelet/bubbletea
+[mp4boxjs]: https://github.com/gpac/mp4box.js
+[mp4boxjs-filereader]: https://gpac.github.io/mp4box.js/test/filereader.html
+[mp4inspector]: https://github.com/bitmovin/MP4Inspector
+[isoviewer]: https://github.com/sannies/isoviewer
+[mp4parser]: https://github.com/sannies/mp4parser
+[fq]: https://github.com/wader/fq
