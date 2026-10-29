@@ -1,9 +1,8 @@
-# Builds the web page and publishes it on GitHub Pages.
+# Builds the web page and publishes it on GitHub Pages. It runs only when started by hand in the Actions tab,
+# after Pages is turned on with GitHub Actions as the source; add a push trigger for main to publish on every push.
 name: Pages
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

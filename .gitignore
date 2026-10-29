@@ -4,6 +4,13 @@ web/site/
 # Python virtual environment for pre-commit
 .venv/
 
+# Binaries built by make and GoReleaser
+out/
+dist/
+
+# Coverage output of make coverage
+/coverage.*
+
 # Binaries built with go build
 /mp4lens
 *.test

@@ -1,5 +1,10 @@
 <img src="images/mp4lens-logo.svg" alt="mp4lens – MP4 and QuickTime box viewer in Go" width="400">
 
+[![Test](https://github.com/Eyevinn/mp4lens/actions/workflows/go.yml/badge.svg)](https://github.com/Eyevinn/mp4lens/actions/workflows/go.yml)
+[![Coverage Status](https://coveralls.io/repos/github/Eyevinn/mp4lens/badge.svg?branch=main)](https://coveralls.io/github/Eyevinn/mp4lens?branch=main)
+[![Go Reference](https://pkg.go.dev/badge/github.com/Eyevinn/mp4lens.svg)](https://pkg.go.dev/github.com/Eyevinn/mp4lens)
+[![license](https://img.shields.io/github/license/Eyevinn/mp4lens.svg)](https://github.com/Eyevinn/mp4lens/blob/main/LICENSE)
+
 Look inside MP4 and QuickTime files: the box tree with the position and size of every box, the fields and bytes
 of each box, where in the bytes each field is, the structures inside boxes such as parameter sets, SEI messages
 and descriptors, and the boxes that cannot be decoded, with the boxes around them still shown. What is specific
@@ -10,9 +15,9 @@ codec string, samples and bitrate.
 mp4lens comes as a web page and as a terminal viewer. Both decode with [mp4ff][mp4ff], and both show the same
 things and take the same searches.
 
-- **Web**: <https://eyevinn.github.io/mp4lens/>. Open or drop a file. It is decoded in the browser by mp4ff
-  compiled to WebAssembly; nothing is uploaded. Large files are read in slices, so they are not loaded into
-  memory as a whole.
+- **Web**: `make serve` builds the page and serves it at <http://localhost:8000/>. Open or drop a file. It is
+  decoded in the browser by mp4ff compiled to WebAssembly; nothing is uploaded. Large files are read in slices,
+  so they are not loaded into memory as a whole.
 - **Terminal**: `mp4lens file.mp4`
 
 ## Install
@@ -20,6 +25,8 @@ things and take the same searches.
 ```sh
 go install github.com/Eyevinn/mp4lens/cmd/mp4lens@latest
 ```
+
+or download a binary for Linux, macOS or Windows from the releases.
 
 ## The terminal viewer
 
@@ -160,24 +167,39 @@ This repository holds the viewers:
 - `internal/tui` and `cmd/mp4lens`: the terminal viewer, built with [Bubble Tea][bubbletea]
 - `web`: the web page; `web/wasm` is the decoder for `GOOS=js GOARCH=wasm`, which runs in a Web Worker
 
-## Building the web page
+## The web page on your computer
 
 ```sh
-go run ./web/build                            # makes web/site
-python3 -m http.server -d web/site 8000       # serve it, since Web Workers do not run from file: URLs
+make serve            # or: go run ./web/build -serve localhost:8000
 ```
 
-Then open <http://localhost:8000/>. The GitHub Pages workflow builds and publishes the same site on every
-push to `main`.
+builds the page into `web/site` and serves it at <http://localhost:8000/> until stopped; `PORT=9000 make serve`
+uses another port. The page needs a web server, since browsers do not run its Web Worker from `file:` URLs, but
+`web/site` is plain static files, so any static web server can serve it. `make web` only builds it.
+
+The Pages workflow builds the same site and publishes it on GitHub Pages. For now it runs only when started by
+hand.
 
 The site gets the favicon and the link preview image from `images`. `images/social-preview.png` is the logo on
 its background color, at the 1280x640 that GitHub asks for, and is also the social preview of the repository
-(uploaded in the GitHub settings). Make it again after changing the logo, with rsvg-convert and ImageMagick:
+(uploaded in the GitHub settings). `make images/social-preview.png` makes it again after a change of the logo,
+with rsvg-convert and ImageMagick.
+
+## Development
 
 ```sh
-rsvg-convert -w 1200 images/mp4lens-logo.svg |
-  magick - -background '#0f172a' -gravity center -extent 1280x640 -strip images/social-preview.png
+make test                 # go test ./...
+make check                # the pre-commit hooks on all files
+make pre-commit-install   # install the pre-commit and commit-msg hooks
+make generate             # the field names of the layout, from the mp4ff version in go.mod
+make coverage             # coverage.html and coverage.txt
+make build                # out/mp4lens
 ```
+
+The hooks run gofmt, golangci-lint, the unit tests and codespell before each commit, and commitlint checks that
+commit messages follow [Conventional Commits](https://www.conventionalcommits.org/). They run from a Python
+environment in `.venv`, which `make` creates. A tag `v*` makes the Release workflow build the binaries with
+GoReleaser.
 
 ## Status
 

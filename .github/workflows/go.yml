@@ -12,15 +12,21 @@ jobs:
       fail-fast: false
       matrix:
         platform: [macos-latest, ubuntu-latest, windows-latest]
+        go-version: ["1.26", "stable"]
     runs-on: ${{ matrix.platform }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          go-version: ${{ matrix.go-version }}
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download Go dependencies
+        run: go mod download
+        env:
+          GOPROXY: "https://proxy.golang.org"
 
       - name: Build
         run: go build -v ./...
@@ -34,8 +40,46 @@ jobs:
           GOOS: js
           GOARCH: wasm
 
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: stable
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Check that the field names match the mp4ff version
-        if: matrix.platform == 'ubuntu-latest'
         run: |
           go generate ./internal/layout
           git diff --exit-code internal/layout/names_gen.go
+
+      - name: Build the web page
+        run: go run ./web/build
+
+  test-386:
+    # 32-bit int and uint. linux/amd64 runs 386 binaries natively.
+    runs-on: ubuntu-latest
+    env:
+      GOARCH: "386"
+    steps:
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: stable
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download Go dependencies
+        run: go mod download
+        env:
+          GOPROXY: "https://proxy.golang.org"
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        run: go test ./...

@@ -21,3 +21,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   version and flags, sample flags and other packed values
 - Plain container boxes are marked as containers, without fields or layout
 - Logo and favicon with the Go gopher; the web page has the favicon and a link preview image
+- `make serve` and `go run ./web/build -serve localhost:8000` build the web page and serve it locally
+- Release binaries for Linux, macOS and Windows, built with GoReleaser on `v*` tags

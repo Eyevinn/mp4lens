@@ -10,6 +10,11 @@
 // Run it from the root of the repository:
 //
 //	go run ./web/build
+//
+// With -serve, it then serves the site on the given address until it is stopped, since browsers do not run the
+// Web Worker of the page from file: URLs:
+//
+//	go run ./web/build -serve localhost:8000
 package main
 
 import (
@@ -18,8 +23,11 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"html"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -78,10 +86,28 @@ func corruptStsz(data []byte) error {
 }
 
 func main() {
+	serve := flag.String("serve", "", "serve the site on this address after building it, such as localhost:8000")
+	flag.Parse()
 	if err := build(); err != nil {
 		fmt.Fprintln(os.Stderr, "build:", err)
 		os.Exit(1)
 	}
+	if *serve != "" {
+		if err := serveSite(*serve); err != nil {
+			fmt.Fprintln(os.Stderr, "serve:", err)
+			os.Exit(1)
+		}
+	}
+}
+
+// serveSite serves the files of the site on addr until the program is stopped.
+func serveSite(addr string) error {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("serving %s at http://%s/ (stop with Ctrl-C)\n", siteDir, ln.Addr())
+	return http.Serve(ln, http.FileServer(http.Dir(siteDir)))
 }
 
 func build() error {
