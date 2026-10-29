@@ -1,4 +1,4 @@
-# mp4lens
+<img src="images/mp4lens-logo.svg" alt="mp4lens – MP4 and QuickTime box viewer in Go" width="400">
 
 Look inside MP4 and QuickTime files: the box tree with the position and size of every box, the fields and bytes
 of each box, where in the bytes each field is, the structures inside boxes such as parameter sets, SEI messages
@@ -170,6 +170,15 @@ python3 -m http.server -d web/site 8000       # serve it, since Web Workers do n
 Then open <http://localhost:8000/>. The GitHub Pages workflow builds and publishes the same site on every
 push to `main`.
 
+The site gets the favicon and the link preview image from `images`. `images/social-preview.png` is the logo on
+its background color, at the 1280x640 that GitHub asks for, and is also the social preview of the repository
+(uploaded in the GitHub settings). Make it again after changing the logo, with rsvg-convert and ImageMagick:
+
+```sh
+rsvg-convert -w 1200 images/mp4lens-logo.svg |
+  magick - -background '#0f172a' -gravity center -extent 1280x640 -strip images/social-preview.png
+```
+
 ## Status
 
 mp4lens needs the `boxtree` package of mp4ff, which is not yet in a released mp4ff version. Until it is,
@@ -200,6 +209,10 @@ browsed in a terminal as well as in the browser.
 ## License
 
 MIT, see [LICENSE](LICENSE).
+
+The gopher in the logo and favicon is adapted from the Go gopher, created by
+[Renée French](https://reneefrench.blogspot.com/) and licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 [mp4ff]: https://github.com/Eyevinn/mp4ff
 [boxtree]: https://github.com/Eyevinn/mp4ff/tree/master/boxtree

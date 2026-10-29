@@ -20,3 +20,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The layout gives the fields of common boxes their names in the specification, says what they are, and splits
   version and flags, sample flags and other packed values
 - Plain container boxes are marked as containers, without fields or layout
+- Logo and favicon with the Go gopher; the web page has the favicon and a link preview image
