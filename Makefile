@@ -72,7 +72,7 @@ images/social-preview.png: images/mp4lens-logo.svg
 
 .PHONY: clean
 clean:
-	rm -rf out/ dist/ web/site/ coverage.out coverage.html coverage.txt
+	rm -rf out/ web/site/ coverage.out coverage.html coverage.txt
 
 .PHONY: install
 install:

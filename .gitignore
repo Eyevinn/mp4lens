@@ -4,9 +4,8 @@ web/site/
 # Python virtual environment for pre-commit
 .venv/
 
-# Binaries built by make and GoReleaser
+# Binaries built by make
 out/
-dist/
 
 # Coverage output of make coverage
 /coverage.*

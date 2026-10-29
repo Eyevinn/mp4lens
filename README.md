@@ -26,8 +26,6 @@ things and take the same searches.
 go install github.com/Eyevinn/mp4lens/cmd/mp4lens@latest
 ```
 
-or download a binary for Linux, macOS or Windows from the releases.
-
 ## The terminal viewer
 
 ```sh
@@ -198,8 +196,7 @@ make build                # out/mp4lens
 
 The hooks run gofmt, golangci-lint, the unit tests and codespell before each commit, and commitlint checks that
 commit messages follow [Conventional Commits](https://www.conventionalcommits.org/). They run from a Python
-environment in `.venv`, which `make` creates. A tag `v*` makes the Release workflow build the binaries with
-GoReleaser.
+environment in `.venv`, which `make` creates.
 
 ## Status
 
