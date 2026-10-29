@@ -2,13 +2,11 @@ module github.com/Eyevinn/mp4lens
 
 go 1.26.0
 
-replace github.com/Eyevinn/mp4ff => ../mp4ff-boxtree
-
 require (
 	charm.land/bubbles/v2 v2.2.1
 	charm.land/bubbletea/v2 v2.1.1
 	charm.land/lipgloss/v2 v2.0.6
-	github.com/Eyevinn/mp4ff v0.61.0
+	github.com/Eyevinn/mp4ff v0.61.1-0.20261029144301-702346275b14
 	github.com/charmbracelet/x/ansi v0.11.9
 )
 

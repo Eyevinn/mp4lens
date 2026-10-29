@@ -181,8 +181,8 @@ rsvg-convert -w 1200 images/mp4lens-logo.svg |
 
 ## Status
 
-mp4lens needs the `boxtree` package of mp4ff, which is not yet in a released mp4ff version. Until it is,
-`go.mod` replaces mp4ff with a local checkout in `../mp4ff-boxtree` that has the package.
+mp4lens needs the `boxtree` package of mp4ff, which is on the mp4ff master branch but not yet in a release, so
+`go.mod` requires a master commit of mp4ff.
 
 The example files in `testdata` come from the mp4ff test data, except the `qt_*.mov` files, which are made with
 ffmpeg from its test sources, and `chapters_subs.m4a`, which ffmpeg makes from the audio of `qt_h264_aac.mov`
