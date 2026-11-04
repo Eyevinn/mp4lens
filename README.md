@@ -200,8 +200,9 @@ environment in `.venv`, which `make` creates.
 
 ## Status
 
-mp4lens needs the `boxtree` package of mp4ff, which is on the mp4ff master branch but not yet in a release, so
-`go.mod` requires a master commit of mp4ff.
+mp4lens uses the `boxtree` package of mp4ff v0.62.0, and needs a later fix on the mp4ff master branch, so that
+the layout shows the fields of QuickTime and 3GPP text atoms such as `chan`, `chpl` and `tx3g`. Until a release
+has the fix, `go.mod` requires a master commit of mp4ff.
 
 The example files in `testdata` come from the mp4ff test data, except the `qt_*.mov` files, which are made with
 ffmpeg from its test sources, and `chapters_subs.m4a`, which ffmpeg makes from the audio of `qt_h264_aac.mov`
