@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   linked to the bytes view on the web page
 - Parts: the parameter sets and SEI messages in avcC, hvcC and vvcC, the OBUs in av1C, and the descriptors
   and AudioSpecificConfig in esds
+- The AudioSpecificConfig of AAC Main and xHE-AAC (USAC) is decoded in full, and the summary names AAC LC that
+  signals SBR or PS in a sync extension HE-AAC or HE-AACv2
 - QuickTime boxes, fields and files are marked; search with `is:quicktime` and `is:part`
 - The layout gives the fields of common boxes their names in the specification, says what they are, and splits
   version and flags, sample flags and other packed values

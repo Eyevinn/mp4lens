@@ -150,8 +150,8 @@ func esFields(p *Part, body []byte) int {
 }
 
 // fullASCTypes are the audio object types whose AudioSpecificConfig mp4ff decodes in full. For other types,
-// such as USAC, it decodes the leading fields.
-var fullASCTypes = map[byte]bool{aac.AAClc: true, aac.HEAACv1: true, aac.HEAACv2: true}
+// such as AAC LTP, it decodes the leading fields.
+var fullASCTypes = map[byte]bool{aac.AACMain: true, aac.AAClc: true, aac.HEAACv1: true, aac.HEAACv2: true, aac.USAC: true}
 
 // audioSpecificConfig decodes the AudioSpecificConfig in b, at position pos in the file.
 func audioSpecificConfig(b []byte, pos uint64) *Part {

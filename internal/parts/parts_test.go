@@ -111,13 +111,28 @@ func TestEsds(t *testing.T) {
 	}
 }
 
-func TestAudioSpecificConfigHeaderOnly(t *testing.T) {
-	// The AudioSpecificConfig of an xHE-AAC (USAC) stream, whose object type mp4ff reads but not the rest.
+func TestAudioSpecificConfigObjectTypes(t *testing.T) {
+	const note = "- note: mp4ff decodes only these leading fields of this object type"
+	// The AudioSpecificConfig of an xHE-AAC (USAC) stream, which mp4ff decodes in full.
 	usac := []byte{0xf9, 0x46, 0x43, 0x22, 0x1c, 0xc0, 0x58, 0x52, 0x00, 0x20, 0x00, 0xa0, 0x40, 0x46, 0xd0, 0xb8, 0x00}
 	p := audioSpecificConfig(usac, 100)
 	if p.Err != nil || !hasLine(p, "- audioObjectType: 42 xHE-AAC (USAC)") ||
-		!hasLine(p, "- samplingFrequency: 48000") || !hasLine(p, "- channelConfiguration: 2") {
+		!hasLine(p, "- samplingFrequency: 48000") || !hasLine(p, "- channelConfiguration: 2") || hasLine(p, note) {
 		t.Errorf("USAC: err %v\n%v", p.Err, p.Info)
+	}
+	// So a USAC config that ends in its UsacConfig is an error, not a config with only the leading fields.
+	if p := audioSpecificConfig(usac[:3], 100); p.Err == nil || hasLine(p, note) {
+		t.Errorf("short USAC: err %v\n%v", p.Err, p.Info)
+	}
+	// AAC Main, 48 kHz, stereo, which mp4ff decodes in full.
+	if p := audioSpecificConfig([]byte{0x09, 0x90}, 100); p.Err != nil ||
+		!hasLine(p, "- audioObjectType: 1 AAC Main") || hasLine(p, note) {
+		t.Errorf("AAC Main: err %v\n%v", p.Err, p.Info)
+	}
+	// AAC LTP, 48 kHz, stereo, of which mp4ff decodes the leading fields.
+	if p := audioSpecificConfig([]byte{0x21, 0x90}, 100); p.Err != nil ||
+		!hasLine(p, "- audioObjectType: 4 AAC LTP") || !hasLine(p, "- channelConfiguration: 2") || !hasLine(p, note) {
+		t.Errorf("AAC LTP: err %v\n%v", p.Err, p.Info)
 	}
 	// An AAC LC config that ends before its channel configuration is still an error.
 	if p := audioSpecificConfig([]byte{0x11}, 100); p.Err == nil {

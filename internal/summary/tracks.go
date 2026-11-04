@@ -305,7 +305,7 @@ func audioDetails(e *mp4.AudioSampleEntryBox) string {
 	if e.Esds != nil && e.Esds.DecConfigDescriptor != nil && e.Esds.DecConfigDescriptor.DecSpecificInfo != nil {
 		config := e.Esds.DecConfigDescriptor.DecSpecificInfo.DecConfig
 		if asc, err := aac.DecodeAudioSpecificConfig(bytes.NewReader(config)); err == nil {
-			name := aacName(asc.ObjectType)
+			name := aacConfigName(asc)
 			if asc.SBRPresentFlag && asc.ExtensionFrequency != 0 {
 				return fmt.Sprintf("%s, %d Hz (core %d Hz), %s", name, asc.ExtensionFrequency,
 					asc.SamplingFrequency, plural(channels, "channel"))
@@ -322,6 +322,18 @@ func audioDetails(e *mp4.AudioSampleEntryBox) string {
 		out += fmt.Sprintf(", %d bits", bits)
 	}
 	return out
+}
+
+// aacConfigName returns the name of the AAC configuration in asc. An AAC LC config that signals SBR, and maybe PS,
+// in a sync extension is named as the object type of explicit signalling, HE-AAC or HE-AACv2.
+func aacConfigName(asc *aac.AudioSpecificConfig) string {
+	if asc.ObjectType == aac.AAClc && asc.SBRPresentFlag {
+		if asc.PSPresentFlag {
+			return aacName(aac.HEAACv2)
+		}
+		return aacName(aac.HEAACv1)
+	}
+	return aacName(asc.ObjectType)
 }
 
 // aacName returns the name of an AAC audio object type.

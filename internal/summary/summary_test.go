@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Eyevinn/mp4ff/mp4"
+
 	"github.com/Eyevinn/mp4lens/internal/boxview"
 )
 
@@ -166,5 +168,25 @@ func TestSignatureImages(t *testing.T) {
 	img := s.Sections[len(s.Sections)-1].Rows[0].Image
 	if img == nil || img.Type != "image/png" || !bytes.Equal(data[img.Pos:img.Pos+img.Size], png) {
 		t.Errorf("thmb image: %+v", img)
+	}
+}
+
+func TestAudioDetailsAAC(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		config []byte
+		want   string
+	}{
+		{"HE-AAC", []byte{0x2b, 0x11, 0x88, 0x00}, "SBR (HE-AAC), 48000 Hz (core 24000 Hz), 2 channels"},
+		{"AAC LC with an SBR sync extension", []byte{0x13, 0x10, 0x56, 0xe5, 0x98},
+			"SBR (HE-AAC), 48000 Hz (core 24000 Hz), 2 channels"},
+		{"AAC LC with SBR and PS sync extensions", []byte{0x13, 0x10, 0x56, 0xe5, 0x9d, 0x48, 0x80},
+			"PS (HE-AACv2), 48000 Hz (core 24000 Hz), 2 channels"},
+		{"AAC Main", []byte{0x09, 0x90}, "AAC Main, 48000 Hz, 2 channels"},
+	} {
+		e := mp4.CreateAudioSampleEntryBox("mp4a", 2, 16, 48000, mp4.CreateEsdsBox(c.config))
+		if got := audioDetails(e); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
 	}
 }
