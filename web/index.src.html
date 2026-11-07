@@ -340,7 +340,7 @@ Keys in the tree: / search · n and N next and previous match · e and E next an
 
   <footer class="status">
     <span class="state" id="decoderState"><span class="dot warn"></span>Loading the decoder…</span>
-    <span>Files are decoded in this browser by <a href="https://github.com/Eyevinn/mp4ff">mp4ff</a> compiled to WebAssembly. Nothing is uploaded. · <a href="https://github.com/Eyevinn/mp4lens">mp4lens on GitHub</a></span>
+    <span>Files are decoded in this browser by <a href="https://github.com/Eyevinn/mp4ff">mp4ff</a> compiled to WebAssembly. Nothing is uploaded. · <a href="https://github.com/Eyevinn/mp4lens">mp4lens</a> <span id="version"></span></span>
   </footer>
 </div>
 <div class="drop" id="drop" hidden>Drop an MP4 file to inspect it</div>
@@ -398,6 +398,7 @@ function startDecoder() {
     if (m.type === "ready") {
       decoder.ready = true;
       setDecoderState("ok", "Decoder ready");
+      $("version").textContent = m.version || "";
       decoder.waiters.splice(0).forEach((w) => w.resolve());
     } else if (m.type === "fatal") {
       decoderFailed(m.message);
