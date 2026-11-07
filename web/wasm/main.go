@@ -1,13 +1,15 @@
 //go:build js && wasm
 
 // Command wasm is the decoder of the mp4lens web page, built for GOOS=js and GOARCH=wasm. It runs in a Web
-// Worker and gives JavaScript three functions:
+// Worker and gives JavaScript these functions:
 //
 //   - mp4lensDecode(source, levels) decodes the box tree of source and returns it as JSON. The source is a
 //     Uint8Array, or a Blob, such as a File, that is read in slices with FileReaderSync.
 //   - mp4lensSearch(query) searches the last decoded tree and returns the keys of the matching boxes as JSON.
 //   - mp4lensLayout(key) returns the byte layout of the box with key in the last decoded tree as JSON.
 //   - mp4lensSummary() returns the summary of the last decoded file as JSON.
+//   - mp4lensVersion() returns the version of the build, such as "v0.1.0, date: 2026-11-10", as mp4lens -version
+//     reports it.
 package main
 
 import (
@@ -17,6 +19,7 @@ import (
 	"io"
 	"syscall/js"
 
+	"github.com/Eyevinn/mp4lens/internal"
 	"github.com/Eyevinn/mp4lens/internal/boxview"
 	"github.com/Eyevinn/mp4lens/internal/layout"
 	"github.com/Eyevinn/mp4lens/internal/summary"
@@ -177,5 +180,6 @@ func main() {
 	js.Global().Set("mp4lensSearch", js.FuncOf(search))
 	js.Global().Set("mp4lensLayout", js.FuncOf(boxLayout))
 	js.Global().Set("mp4lensSummary", js.FuncOf(fileSummary))
+	js.Global().Set("mp4lensVersion", js.FuncOf(func(js.Value, []js.Value) any { return internal.Version() }))
 	select {}
 }

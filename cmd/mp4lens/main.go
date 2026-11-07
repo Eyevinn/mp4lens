@@ -10,10 +10,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime/debug"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/Eyevinn/mp4lens/internal"
 	"github.com/Eyevinn/mp4lens/internal/boxview"
 	"github.com/Eyevinn/mp4lens/internal/summary"
 	"github.com/Eyevinn/mp4lens/internal/tui"
@@ -56,7 +56,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if *version {
-		fmt.Fprintln(stdout, "mp4lens", versionString())
+		fmt.Fprintln(stdout, "mp4lens", internal.Version())
 		return nil
 	}
 	if fs.NArg() != 1 {
@@ -116,12 +116,4 @@ func findBoxes(w io.Writer, r io.ReaderAt, size int64, levels, query string) err
 		return errors.New("no boxes match")
 	}
 	return nil
-}
-
-// versionString returns the module version of the build, such as v0.1.0, or "(devel)".
-func versionString() string {
-	if info, ok := debug.ReadBuildInfo(); ok {
-		return info.Main.Version
-	}
-	return "(devel)"
 }

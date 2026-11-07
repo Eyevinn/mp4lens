@@ -11,11 +11,11 @@ const ready = (async () => {
     const bytes = await (await fetch("mp4lens.wasm")).arrayBuffer();
     result = await WebAssembly.instantiate(bytes, go.importObject);
   }
-  go.run(result.instance); // Sets self.mp4lensDecode, mp4lensSearch, mp4lensLayout and mp4lensSummary, then waits.
+  go.run(result.instance); // Sets self.mp4lensDecode, mp4lensSearch, mp4lensLayout, mp4lensSummary and mp4lensVersion.
 })();
 
 ready.then(
-  () => postMessage({ type: "ready" }),
+  () => postMessage({ type: "ready", version: self.mp4lensVersion() }),
   (e) => postMessage({ type: "fatal", message: String((e && e.message) || e) })
 );
 

@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Plain container boxes are marked as containers, without fields or layout
 - Logo and favicon with the Go gopher; the web page has the favicon and a link preview image
 - `make serve` and `go run ./web/build -serve localhost:8000` build the web page and serve it locally
+- The web page is published at https://eyevinn.github.io/mp4lens/ for each release, and shows its version in the
+  footer, as `mp4lens -version` does, with the date of the release
 
 <!-- At a release, rename [Unreleased] to the version and date, add a new
 [Unreleased] section, and add a link for the version, for example
