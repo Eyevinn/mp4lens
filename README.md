@@ -2,6 +2,7 @@
 
 [![Test](https://github.com/Eyevinn/mp4lens/actions/workflows/go.yml/badge.svg)](https://github.com/Eyevinn/mp4lens/actions/workflows/go.yml)
 [![Coverage Status](https://coveralls.io/repos/github/Eyevinn/mp4lens/badge.svg?branch=main)](https://coveralls.io/github/Eyevinn/mp4lens?branch=main)
+[![golangci-lint](https://github.com/Eyevinn/mp4lens/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/Eyevinn/mp4lens/actions/workflows/golangci-lint.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/Eyevinn/mp4lens.svg)](https://pkg.go.dev/github.com/Eyevinn/mp4lens)
 [![license](https://img.shields.io/github/license/Eyevinn/mp4lens.svg)](https://github.com/Eyevinn/mp4lens/blob/main/LICENSE)
 
@@ -187,10 +188,14 @@ with rsvg-convert and ImageMagick.
 
 ```sh
 make test                 # go test ./...
-make check                # the pre-commit hooks on all files
+make check                # go.mod tidiness, go vet and golangci-lint
 make pre-commit-install   # install the pre-commit and commit-msg hooks
+make pre-commit           # the pre-commit hooks on all files
+make codespell            # spell check with the settings in .codespellrc
 make generate             # the field names of the layout, from the mp4ff version in go.mod
 make coverage             # coverage.html and coverage.txt
+make vulncheck            # known vulnerabilities that the code reaches, with govulncheck
+make check-licenses       # the licenses of the dependencies, with wwhrd
 make build                # out/mp4lens
 ```
 
@@ -226,13 +231,43 @@ Other tools that show the boxes of MP4 files:
 mp4lens decodes with mp4ff, so it shows the boxes as programs built on mp4ff see them, and its box tree can be
 browsed in a terminal as well as in the browser.
 
+## Contributing
+
+See [CONTRIBUTING](CONTRIBUTING.md).
+
 ## License
 
-MIT, see [LICENSE](LICENSE).
+This project is licensed under the MIT License, see [LICENSE](LICENSE).
 
 The gopher in the logo and favicon is adapted from the Go gopher, created by
 [Renée French](https://reneefrench.blogspot.com/) and licensed under
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+## Support
+
+Join our [community on Slack](https://slack.osaas.io/) where you can post any questions regarding any of our open source projects. Eyevinn's consulting business can also offer you:
+
+- Further development of this component
+- Customization and integration of this component into your platform
+- Support and maintenance agreement
+
+Contact [sales@eyevinn.se](mailto:sales@eyevinn.se) if you are interested.
+
+## About Eyevinn Technology
+
+[Eyevinn Technology](https://www.eyevinntechnology.se) helps companies in the TV, media, and entertainment sectors optimize costs and boost profitability through enhanced media solutions.
+We are independent in a way that we are not commercially tied to any platform or technology vendor. As our way to innovate and push the industry forward, we develop proof-of-concepts and tools. We share things we have learned and code as open-source.
+
+With Eyevinn Open Source Cloud we enable you to build solutions and applications based on Open Web Services and avoid being locked in with a single web service vendor. Our open-source solutions offer full flexibility with a revenue share model that supports the creators.
+
+Read our blogs and articles here:
+
+- [Developer blogs](https://dev.to/video)
+- [Medium](https://eyevinntechnology.medium.com)
+- [OSC](https://www.osaas.io)
+- [LinkedIn](https://www.linkedin.com/company/eyevinn/)
+
+Want to know more about Eyevinn? Contact us at info@eyevinn.se!
 
 [mp4ff]: https://github.com/Eyevinn/mp4ff
 [boxtree]: https://github.com/Eyevinn/mp4ff/tree/master/boxtree

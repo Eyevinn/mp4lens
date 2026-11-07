@@ -1,25 +1,37 @@
+# Contributor pre-commit hooks. Install once per clone with
+# `make pre-commit-install`, which sets up pre-commit in a Python virtual
+# environment in .venv. CI enforces formatting, linting and tests independently.
 
+# pre-commit install sets up only the pre-commit hook type by default, and
+# commitlint runs as a commit-msg hook.
 default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
+      # Test fixtures may be compared byte for byte, so never rewrite them.
       - id: trailing-whitespace
+        exclude: testdata
+      - id: end-of-file-fixer
+        exclude: testdata
   - repo: https://github.com/dnephin/pre-commit-golang
     rev: v0.5.1
     hooks:
       - id: go-fmt
       - id: golangci-lint
       - id: go-unit-tests
+  # Settings in .codespellrc. Keep the rev equal to CODESPELL_VERSION in the Makefile.
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+    rev: v2.4.3
     hooks:
       - id: codespell
   - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
-    rev: v9.18.0
+    rev: v9.27.0
     hooks:
       - id: commitlint
         stages: [commit-msg]
         # Keep the major version equal to the commitlint CLI that the hook rev
-        # ships (19 for v9.18.0), or headers like feat!: no longer parse.
-        additional_dependencies: ['@commitlint/config-conventional@19']
+        # ships (21 for v9.27.0), or headers like feat!: no longer parse.
+        additional_dependencies: ['@commitlint/config-conventional@21']

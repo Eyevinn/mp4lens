@@ -1,16 +1,36 @@
-# The built web site
-web/site/
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
 
-# Python virtual environment for pre-commit
-.venv/
+# Test binary, built with `go test -c`
+*.test
 
-# Binaries built by make
+# Build output (written by `make build`)
 out/
 
-# Coverage output of make coverage
-/coverage.*
-
-# Binaries built with go build
+# Binaries built with go build in the root or in cmd/mp4lens
 /mp4lens
-*.test
 /cmd/mp4lens/mp4lens
+
+# The built web site (written by `make web` and `make serve`)
+web/site/
+
+# Coverage (written by `make coverage` and the Coverage workflow). Anchored,
+# so that .github/workflows/coverage.yml is not ignored.
+/coverage.*
+/profile.cov
+
+# Dependency directories (remove the comment below to include it)
+vendor/
+
+# Python virtual environments (pre-commit)
+venv/
+.venv/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store

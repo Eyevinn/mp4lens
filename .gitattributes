@@ -1,7 +1,10 @@
+# Normalize line endings to LF on checkout on every platform, so Git for
+# Windows' autocrlf cannot rewrite tracked files — which otherwise breaks
+# byte-exact fixture comparisons and confuses Go tooling.
+* text=auto eol=lf
+
 # Changelog entries from different branches are appended at the same place,
-# so keep both sides instead of conflicting on every rebase.
-#
-# Note: GitHub does not honour this server-side when computing pull request
-# mergeability, so PRs can still show a CHANGELOG conflict that resolves
-# cleanly on a local rebase.
+# so keep both sides instead of conflicting on every rebase. GitHub does not
+# honour this when computing pull request mergeability, so a PR can still show
+# a CHANGELOG conflict that resolves cleanly on a local rebase.
 CHANGELOG.md merge=union
