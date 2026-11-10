@@ -6,7 +6,7 @@ require (
 	charm.land/bubbles/v2 v2.2.1
 	charm.land/bubbletea/v2 v2.1.1
 	charm.land/lipgloss/v2 v2.0.6
-	github.com/Eyevinn/mp4ff v0.62.1-0.20261104131019-fb2cd04e3d0e
+	github.com/Eyevinn/mp4ff v0.62.1
 	github.com/charmbracelet/x/ansi v0.11.9
 )
 
