@@ -7,11 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-10
+
+First release.
+
 ### Added
 
 - `mp4lens` terminal viewer: box tree with positions and decode errors, fields and bytes of the selected box,
   and search; `-find` prints the matching boxes instead
 - Web page that decodes files in the browser with WebAssembly, with the same views and search
+- File summary with brands, duration, metadata, chapters, and the codec string, samples and bitrate of each
+  track, in both viewers; `-summary` prints it
 - Byte layout of each box: position, size, type, name and value of every field that mp4ff reads,
   linked to the bytes view on the web page
 - Parts: the parameter sets and SEI messages in avcC, hvcC and vvcC, the OBUs in av1C, and the descriptors
@@ -26,9 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `make serve` and `go run ./web/build -serve localhost:8000` build the web page and serve it locally
 - The web page shows its version in the footer, as `mp4lens -version` does, with the date of the release
 
-<!-- At a release, rename [Unreleased] to the version and date, add a new
-[Unreleased] section, and add a link for the version, for example
-[0.1.0]: https://github.com/Eyevinn/mp4lens/releases/tag/v0.1.0
-and point [Unreleased] at https://github.com/Eyevinn/mp4lens/compare/v0.1.0...HEAD -->
+<!-- At a release, add a section for the version and date below [Unreleased] with its
+changes, add a link for the version that compares it with the previous one, for example
+[0.2.0]: https://github.com/Eyevinn/mp4lens/compare/v0.1.0...v0.2.0
+and point [Unreleased] at the new version. -->
 
-[Unreleased]: https://github.com/Eyevinn/mp4lens/commits/main
+[Unreleased]: https://github.com/Eyevinn/mp4lens/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Eyevinn/mp4lens/releases/tag/v0.1.0
