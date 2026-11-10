@@ -16,10 +16,9 @@ codec string, samples and bitrate.
 mp4lens comes as a web page and as a terminal viewer. Both decode with [mp4ff][mp4ff], and both show the same
 things and take the same searches.
 
-- **Web**: <https://eyevinn.github.io/mp4lens/> has the page of the latest release, and `make serve` builds it
-  and serves it at <http://localhost:8000/>. Open or drop a file. It is decoded in the browser by mp4ff compiled
-  to WebAssembly; nothing is uploaded. Large files are read in slices, so they are not loaded into memory as a
-  whole.
+- **Web**: `make serve` builds the page and serves it at <http://localhost:8000/>. Open or drop a file. It is
+  decoded in the browser by mp4ff compiled to WebAssembly; nothing is uploaded. Large files are read in slices,
+  so they are not loaded into memory as a whole.
 - **Terminal**: `mp4lens file.mp4`
 
 ## Install
@@ -177,14 +176,17 @@ builds the page into `web/site` and serves it at <http://localhost:8000/> until 
 uses another port. The page needs a web server, since browsers do not run its Web Worker from `file:` URLs, but
 `web/site` is plain static files, so any static web server can serve it. `make web` only builds it.
 
-The Pages workflow builds the same site for each release tag, `v*`, and publishes it on GitHub Pages at
-<https://eyevinn.github.io/mp4lens/>. The footer of the page shows the version, as `mp4lens -version` does: the
-release tag and its date, or a pseudo-version for a build between releases.
+To publish the page, copy `web/site` to a web server; it works at any address. Build it from a clean checkout of
+the release tag, since the footer of the page shows the version, as `mp4lens -version` does: the release tag and
+its date, or a pseudo-version for a build between releases.
 
-The site gets the favicon and the link preview image from `images`. `images/social-preview.png` is the logo on
-its background color, at the 1280x640 that GitHub asks for, and is also the social preview of the repository
-(uploaded in the GitHub settings). `make images/social-preview.png` makes it again after a change of the logo,
-with rsvg-convert and ImageMagick.
+The Pages workflow builds the site and publishes it on GitHub Pages. For now it runs only when started by hand.
+
+The site gets the favicon from `images`. The link preview image of the page is `images/social-preview.png` on the
+main branch on GitHub, so it is the same wherever the page is served. It is the logo on its background color, at
+the 1280x640 that GitHub asks for, and is also the social preview of the repository (uploaded in the GitHub
+settings). `make images/social-preview.png` makes it again after a change of the logo, with rsvg-convert and
+ImageMagick.
 
 ## Development
 
