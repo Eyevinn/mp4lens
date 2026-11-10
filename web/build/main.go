@@ -5,7 +5,7 @@
 //   - wasm_exec.js, the JavaScript support code of the Go WebAssembly port
 //   - worker.js, the Web Worker that runs the decoder
 //   - examples/, the example files
-//   - favicon.svg and social-preview.png, the favicon and the link preview image, from images
+//   - favicon.svg, the favicon, from images
 //
 // Run it from the root of the repository:
 //
@@ -129,10 +129,8 @@ func build() error {
 	if err := copyFile(filepath.Join(srcDir, "worker.js"), filepath.Join(siteDir, "worker.js")); err != nil {
 		return err
 	}
-	for _, name := range []string{"favicon.svg", "social-preview.png"} {
-		if err := copyFile(filepath.Join(imagesDir, name), filepath.Join(siteDir, name)); err != nil {
-			return err
-		}
+	if err := copyFile(filepath.Join(imagesDir, "favicon.svg"), filepath.Join(siteDir, "favicon.svg")); err != nil {
+		return err
 	}
 	examples, err := makeExamples()
 	if err != nil {
