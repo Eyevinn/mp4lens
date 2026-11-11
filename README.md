@@ -6,6 +6,9 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/Eyevinn/mp4lens.svg)](https://pkg.go.dev/github.com/Eyevinn/mp4lens)
 [![license](https://img.shields.io/github/license/Eyevinn/mp4lens.svg)](https://github.com/Eyevinn/mp4lens/blob/main/LICENSE)
 
+**Try it in your browser at <https://mp4lens.pages.osaas.io/>**. Files are decoded on your own computer and are
+never uploaded. The page is hosted on [Eyevinn Open Source Cloud](https://www.osaas.io).
+
 Look inside MP4 and QuickTime files: the box tree with the position and size of every box, the fields and bytes
 of each box, where in the bytes each field is, the structures inside boxes such as parameter sets, SEI messages
 and descriptors, and the boxes that cannot be decoded, with the boxes around them still shown. What is specific
@@ -16,9 +19,9 @@ codec string, samples and bitrate.
 mp4lens comes as a web page and as a terminal viewer. Both decode with [mp4ff][mp4ff], and both show the same
 things and take the same searches.
 
-- **Web**: `make serve` builds the page and serves it at <http://localhost:8000/>. Open or drop a file. It is
-  decoded in the browser by mp4ff compiled to WebAssembly; nothing is uploaded. Large files are read in slices,
-  so they are not loaded into memory as a whole.
+- **Web**: open <https://mp4lens.pages.osaas.io/>, or run `make serve` to build the page and serve it at
+  <http://localhost:8000/>. Open or drop a file. It is decoded in the browser by mp4ff compiled to WebAssembly;
+  nothing is uploaded. Large files are read in slices, so they are not loaded into memory as a whole.
 - **Terminal**: `mp4lens file.mp4`
 
 ## Install
@@ -179,8 +182,6 @@ uses another port. The page needs a web server, since browsers do not run its We
 To publish the page, copy `web/site` to a web server; it works at any address. Build it from a clean checkout of
 the release tag, since the footer of the page shows the version, as `mp4lens -version` does: the release tag and
 its date, or a pseudo-version for a build between releases.
-
-The Pages workflow builds the site and publishes it on GitHub Pages. For now it runs only when started by hand.
 
 The site gets the favicon from `images`. The link preview image of the page is `images/social-preview.png` on the
 main branch on GitHub, so it is the same wherever the page is served. It is the logo on its background color, at

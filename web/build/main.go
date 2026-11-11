@@ -1,4 +1,4 @@
-// Command build makes the mp4lens web site in web/site, ready to serve as static files, such as on GitHub Pages:
+// Command build makes the mp4lens web site in web/site, ready to serve as static files from any web server:
 //
 //   - index.html, the page, with the list of examples and the first example and its box tree embedded
 //   - mp4lens.wasm, the decoder in web/wasm compiled to WebAssembly
@@ -156,10 +156,6 @@ func build() error {
 		out = strings.Replace(out, placeholder, value, 1)
 	}
 	if err := os.WriteFile(filepath.Join(siteDir, "index.html"), []byte(out), 0o644); err != nil {
-		return err
-	}
-	// GitHub Pages serves the files as they are, without Jekyll.
-	if err := os.WriteFile(filepath.Join(siteDir, ".nojekyll"), nil, 0o644); err != nil {
 		return err
 	}
 	fmt.Println("wrote", siteDir)
