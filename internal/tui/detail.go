@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -35,16 +36,19 @@ var (
 	styleHexType  = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	styleHexVF    = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
 	styleHexChild = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	styleHexHit   = lipgloss.NewStyle().Reverse(true)
+	// A search hit is yellow, as on the web page, so that it differs from the marked field.
+	styleHexHit = lipgloss.NewStyle().Background(lipgloss.Color("3")).Foreground(lipgloss.Color("0"))
+	// styleMarked marks a field of the layout: its row, its entry in the fields and its bytes.
+	styleMarked = lipgloss.NewStyle().Reverse(true)
 )
 
 // maxKeyWidth is the widest that the key column of the fields gets.
 const maxKeyWidth = 28
 
 // detailContent returns the details of n, for a pane width cells wide.
-func (m *Model) detailContent(n *boxview.Node, width int) string {
-	var lines []string
-	add := func(s ...string) { lines = append(lines, s...) }
+func (m *Model) detailContent(n *boxview.Node, width int) *paneText {
+	p := &paneText{}
+	add := func(s ...string) { p.add(lineRef{}, s...) }
 
 	add(styleFaint.Render(strings.ReplaceAll(n.Path(), "/", " › ")))
 	head := styleTitle.Render(n.Name())
@@ -103,21 +107,33 @@ func (m *Model) detailContent(n *boxview.Node, width int) string {
 	}
 
 	// A plain container has no fields of its own, so its layout is only the box header.
-	var res *layout.Result
-	if !n.PlainContainer() {
-		res = m.layoutOf(n)
-	}
+	res := m.boxLayout(n)
+	shown := m.shownField(n)
 	if fields := n.Fields(); len(fields) > 0 {
 		add("", styleHead.Render("Fields"))
-		add(fieldLines(fields, quickTimeKeys(res))...)
+		linked, shownKey := linkedFields(res), ""
+		if shown != nil {
+			shownKey = fieldKey(shown.Name)
+		}
+		for i, line := range fieldLines(fields, quickTimeKeys(res), shownKey) {
+			ref := lineRef{}
+			if j, ok := linked[normalKey(fields[i].Key)]; ok && fields[i].Key != "" {
+				ref = lineRef{kind: lineField, index: j}
+			}
+			p.add(ref, line)
+		}
 	}
 	if res != nil && (len(res.Fields) > 0 || res.Err != nil) {
 		add("")
-		add(m.layoutLines(n, res)...)
+		m.layoutLines(p, n, res, shown)
 	}
 	add("")
-	add(m.hexLines(n, width)...)
-	return strings.Join(lines, "\n")
+	m.hexLines(p, n, width, shown)
+	// The meanings come after the bytes, so that the layout and the bytes are close.
+	if res != nil {
+		add(aboutLines(res.Fields)...)
+	}
+	return p
 }
 
 func (m *Model) statusText(n *boxview.Node) string {
@@ -190,9 +206,10 @@ func factLines(facts [][2]string, width int) []string {
 	return lines
 }
 
-// fieldLines lays out the fields, with a QT tag after those whose keys, in lower case without spaces and
-// underscores, start with "quicktime" or are in qtKeys.
-func fieldLines(fields []boxview.Field, qtKeys map[string]bool) []string {
+// fieldLines lays out the fields, one line each, with a QT tag after those whose keys, in lower case without
+// spaces and underscores, start with "quicktime" or are in qtKeys. The keys that are shownKey in that form are
+// marked.
+func fieldLines(fields []boxview.Field, qtKeys map[string]bool, shownKey string) []string {
 	keyW := 0
 	for _, f := range fields {
 		keyW = max(keyW, min(maxKeyWidth, 2*f.Indent+ansi.StringWidth(f.Key)))
@@ -205,8 +222,13 @@ func fieldLines(fields []boxview.Field, qtKeys map[string]bool) []string {
 			continue
 		}
 		key := indent + f.Key
-		line := styleFaint.Render(key) + strings.Repeat(" ", max(1, keyW+2-ansi.StringWidth(key))) + f.Value
-		if nk := normalKey(f.Key); strings.HasPrefix(nk, "quicktime") || qtKeys[nk] {
+		nk := normalKey(f.Key)
+		keyStyle := styleFaint
+		if nk == shownKey {
+			keyStyle = styleMarked
+		}
+		line := indent + keyStyle.Render(f.Key) + strings.Repeat(" ", max(1, keyW+2-ansi.StringWidth(key))) + f.Value
+		if strings.HasPrefix(nk, "quicktime") || qtKeys[nk] {
 			line += "  " + styleQT.Render("QT")
 		}
 		lines = append(lines, line)
@@ -221,10 +243,17 @@ const (
 	kindType
 	kindVF
 	kindChild
+	kindHit    // found by the search
+	kindMarked // a byte of the marked field
 )
 
-// hexLines returns the hex dump of the first bytes of n, with its header and the headers of its children marked.
-func (m *Model) hexLines(n *boxview.Node, width int) []string {
+// hexStyles are the styles of the byte kinds.
+var hexStyles = [...]lipgloss.Style{kindNone: lipgloss.NewStyle(), kindSize: styleHexSize, kindType: styleHexType,
+	kindVF: styleHexVF, kindChild: styleHexChild, kindHit: styleHexHit, kindMarked: styleMarked}
+
+// hexLines adds the hex dump of the first bytes of n to p, with its header, the headers of its children, the bytes
+// that the search found and the bytes of the shown field marked.
+func (m *Model) hexLines(p *paneText, n *boxview.Node, width int, shown *layout.Field) {
 	total := uint64(0)
 	if n.Pos < uint64(m.size) {
 		total = min(n.Size, uint64(m.size)-n.Pos)
@@ -236,15 +265,17 @@ func (m *Model) hexLines(n *boxview.Node, width int) []string {
 	title := styleHead.Render("Bytes")
 	switch {
 	case total == 0:
-		return []string{title, styleFaint.Render("No bytes of this box are in the file.")}
+		p.add(lineRef{}, title, styleFaint.Render("No bytes of this box are in the file."))
+		return
 	case count < total:
 		title += styleFaint.Render(fmt.Sprintf("  first %d of %d", count, total))
 	case total < n.Size:
 		title += styleFaint.Render(fmt.Sprintf("  %d of %d are in the file", total, n.Size))
 	}
-	lines := []string{title, hexLegend(n)}
+	hit := m.hitMask(n.Pos, len(buf))
+	p.add(lineRef{}, title, hexLegend(n, slices.Contains(hit, true)))
 	if err != nil && k < int(count) {
-		lines = append(lines, styleErr.Render("Read error: "+err.Error()))
+		p.add(lineRef{}, styleErr.Render("Read error: "+err.Error()))
 	}
 
 	kinds := make([]byte, len(buf))
@@ -270,21 +301,32 @@ func (m *Model) hexLines(n *boxview.Node, width int) []string {
 			kinds[i] = kindChild
 		}
 	}
-	hit := m.hitMask(n.Pos, len(buf))
+	for i, h := range hit {
+		if h {
+			kinds[i] = kindHit
+		}
+	}
+	if shown != nil && shown.Pos >= n.Pos {
+		start := shown.Pos - n.Pos
+		for i := start; i < min(start+uint64(shown.Size), uint64(len(buf))); i++ {
+			kinds[i] = kindMarked
+		}
+	}
 
 	perRow := 16
 	if width < 76 {
 		perRow = 8
 	}
 	for r := 0; r < len(buf); r += perRow {
-		var hx, asc strings.Builder
+		var hx, asc styledRuns
 		for j := 0; j < perRow; j++ {
 			i := r + j
+			sep := " "
 			if j == 8 {
-				hx.WriteByte(' ')
+				sep = "  "
 			}
 			if i >= len(buf) {
-				hx.WriteString("   ")
+				hx.plain(sep + "  ")
 				continue
 			}
 			b := buf[i]
@@ -292,16 +334,59 @@ func (m *Model) hexLines(n *boxview.Node, width int) []string {
 			if b >= 0x20 && b < 0x7f {
 				ch = string(rune(b))
 			}
-			st := hexStyle(kinds[i], hit[i])
-			hx.WriteString(" " + st.Render(fmt.Sprintf("%02x", b)))
-			asc.WriteString(st.Render(ch))
+			hx.add(kinds[i], sep, fmt.Sprintf("%02x", b))
+			asc.add(kinds[i], "", ch)
 		}
-		lines = append(lines, styleFaint.Render(fmt.Sprintf("%08x", n.Pos+uint64(r)))+" "+hx.String()+"  "+asc.String())
+		line := styleFaint.Render(fmt.Sprintf("%08x", n.Pos+uint64(r))) + " " + hx.String() + "  " + asc.String()
+		p.add(lineRef{kind: lineHex, index: r, count: min(perRow, len(buf)-r), perRow: perRow}, line)
 	}
 	if count < total {
-		lines = append(lines, styleFaint.Render("Press m for more bytes."))
+		p.add(lineRef{}, styleFaint.Render("Press m for more bytes."))
 	}
-	return lines
+}
+
+// styledRuns writes bytes of the hex dump in runs of the same kind, each rendered in its style at once. The
+// separator before a byte of the same kind as the one before it is in the run, so that the bytes of a field or
+// a search hit are marked as one block.
+type styledRuns struct {
+	sb, run strings.Builder
+	kind    byte
+}
+
+// add writes text of kind, after sep.
+func (r *styledRuns) add(kind byte, sep, text string) {
+	if r.run.Len() > 0 && kind == r.kind {
+		r.run.WriteString(sep + text)
+		return
+	}
+	r.flush()
+	r.sb.WriteString(sep)
+	r.kind = kind
+	r.run.WriteString(text)
+}
+
+// plain writes s without a style.
+func (r *styledRuns) plain(s string) {
+	r.flush()
+	r.sb.WriteString(s)
+}
+
+func (r *styledRuns) flush() {
+	if r.run.Len() == 0 {
+		return
+	}
+	if r.kind == kindNone {
+		r.sb.WriteString(r.run.String())
+	} else {
+		r.sb.WriteString(hexStyles[r.kind].Render(r.run.String()))
+	}
+	r.run.Reset()
+}
+
+// String returns what was written.
+func (r *styledRuns) String() string {
+	r.flush()
+	return r.sb.String()
 }
 
 // hitMask marks the bytes from pos that the search found.
@@ -321,24 +406,8 @@ func (m *Model) hitMask(pos uint64, n int) []bool {
 	return mask
 }
 
-func hexStyle(kind byte, hit bool) lipgloss.Style {
-	if hit {
-		return styleHexHit
-	}
-	switch kind {
-	case kindSize:
-		return styleHexSize
-	case kindType:
-		return styleHexType
-	case kindVF:
-		return styleHexVF
-	case kindChild:
-		return styleHexChild
-	}
-	return lipgloss.NewStyle()
-}
-
-func hexLegend(n *boxview.Node) string {
+// hexLegend says what the colors of the hex dump of n are, with the search hits if hits is true.
+func hexLegend(n *boxview.Node, hits bool) string {
 	parts := []string{styleHexSize.Render("size"), styleHexType.Render("type")}
 	if _, _, ok := n.VersionFlags(); ok {
 		parts = append(parts, styleHexVF.Render("version+flags"))
@@ -348,6 +417,9 @@ func hexLegend(n *boxview.Node) string {
 			parts = append(parts, styleHexChild.Render("child box header"))
 			break
 		}
+	}
+	if hits {
+		parts = append(parts, styleHexHit.Render("search hit"))
 	}
 	return strings.Join(parts, "  ")
 }
@@ -361,7 +433,7 @@ func helpText() string {
 		{"enter space", "open or close the box"},
 		{"+ -", "open or close all boxes"},
 		{"pgup pgdn g G", "page up and down, first and last box"},
-		{"tab", "switch between the tree and the box pane, which then scrolls"},
+		{"tab", "switch between the tree and the box pane"},
 		{"/", "search; enter runs it, an empty search clears it"},
 		{"n N", "next and previous matching box"},
 		{"f", "show only the matching boxes"},
@@ -369,7 +441,7 @@ func helpText() string {
 		{"a", "switch between the main fields and all fields, such as all samples"},
 		{"m", "show more bytes and layout fields"},
 		{"s", "show the summary of the file: brands, movie, metadata, chapters and tracks"},
-		{"esc", "close the help or summary, or clear the search"},
+		{"esc", "close the help or summary, remove the mark, or clear the search"},
 		{"q", "quit"},
 	}
 	var sb strings.Builder
@@ -377,6 +449,20 @@ func helpText() string {
 	for _, k := range keys {
 		sb.WriteString(styleKey.Render(fmt.Sprintf("%-15s", k[0])) + k[1] + "\n")
 	}
+	sb.WriteString("\n" + styleHead.Render("Box pane") + "\n")
+	pane := [][2]string{
+		{"↓ ↑ j k", "mark the next and previous field of the layout, and its bytes"},
+		{"g G", "mark the first and last field"},
+		{"pgup pgdn", "scroll; also b and space, u and d, and the mouse wheel"},
+		{"esc", "remove the mark"},
+	}
+	for _, k := range pane {
+		sb.WriteString(styleKey.Render(fmt.Sprintf("%-15s", k[0])) + k[1] + "\n")
+	}
+	sb.WriteString("A box without layout fields scrolls with ↓ ↑ j k.\n")
+	sb.WriteString("\n" + styleHead.Render("Mouse") + "\n")
+	sb.WriteString("Point at a field, a row of the layout or a byte to mark the field and its bytes; the footer says\n" +
+		"what the byte or field is. Click a byte of a child box to open it.\n")
 	sb.WriteString("\n" + styleHead.Render("Search") + "\n" + boxview.QueryHelp + "\n")
 	return sb.String()
 }
@@ -408,9 +494,10 @@ func (m *Model) layoutOf(n *boxview.Node) *layout.Result {
 // maxLayoutName is the widest that the name column of the layout gets.
 const maxLayoutName = 26
 
-// layoutLines lays out the fields of res, the layout of n: the file position in hex, the offset in the box, the
-// size, the kind of read, the name and the value, with a QT tag for QuickTime fields, whose notes follow.
-func (m *Model) layoutLines(n *boxview.Node, res *layout.Result) []string {
+// layoutLines adds the fields of res, the layout of n, to p: the file position in hex, the offset in the box, the
+// size, the kind of read, the name and the value, with a QT tag for QuickTime fields, whose notes follow. The row
+// of the shown field is marked. The meanings of the fields are left to aboutLines.
+func (m *Model) layoutLines(p *paneText, n *boxview.Node, res *layout.Result, shown *layout.Field) {
 	title := styleHead.Render("Layout") + styleFaint.Render(fmt.Sprintf("  %d fields as mp4ff reads them", len(res.Fields)))
 	if res.Capped {
 		title += styleFaint.Render(", more not recorded")
@@ -418,9 +505,9 @@ func (m *Model) layoutLines(n *boxview.Node, res *layout.Result) []string {
 	if res.Spec != "" {
 		title += styleFaint.Render(" · " + res.Spec)
 	}
-	lines := []string{title}
+	p.add(lineRef{}, title)
 	if res.Err != nil && !n.ChildErr {
-		lines = append(lines, styleErr.Render("The decoder stopped: ")+res.Err.Error())
+		p.add(lineRef{}, styleErr.Render("The decoder stopped: ")+res.Err.Error())
 	}
 	nameW := 4
 	for _, f := range res.Fields {
@@ -430,7 +517,7 @@ func (m *Model) layoutLines(n *boxview.Node, res *layout.Result) []string {
 	seen := map[string]bool{}
 	for i, f := range res.Fields {
 		if i == m.layoutLimit {
-			lines = append(lines, styleFaint.Render(fmt.Sprintf("%d more fields. Press m for more.", len(res.Fields)-i)))
+			p.add(lineRef{}, styleFaint.Render(fmt.Sprintf("%d more fields. Press m for more.", len(res.Fields)-i)))
 			break
 		}
 		name := fieldName(f)
@@ -446,10 +533,12 @@ func (m *Model) layoutLines(n *boxview.Node, res *layout.Result) []string {
 				notes = append(notes, styleQT.Render("QT ")+f.Name+": "+f.QuickTime)
 			}
 		}
-		lines = append(lines, line)
+		if shown == &res.Fields[i] {
+			line = styleMarked.Render(ansi.Strip(line))
+		}
+		p.add(lineRef{kind: lineLayout, index: i}, line)
 	}
-	lines = append(lines, notes...)
-	return append(lines, aboutLines(res.Fields)...)
+	p.add(lineRef{}, notes...)
 }
 
 // fieldName returns the name of a layout field in the specification, or else the name that mp4ff gives it.

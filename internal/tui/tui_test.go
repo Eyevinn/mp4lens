@@ -3,6 +3,7 @@ package tui
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -305,5 +306,196 @@ func TestSummaryView(t *testing.T) {
 	press(m, "esc")
 	if s := screen(m); strings.Contains(s, "Chapters (chpl)") {
 		t.Errorf("summary still shown after esc:\n%s", s)
+	}
+}
+
+// lineOf returns the first line of the box pane that shows a field or layout line of kind for field i, or -1.
+func lineOf(m *Model, kind lineKind, i int) int {
+	for k, r := range m.lines {
+		if r.kind == kind && r.index == i {
+			return k
+		}
+	}
+	return -1
+}
+
+// hexCell returns the line of the hex dump with the byte at offset off of the selected box, and the column of its
+// first hex digit.
+func hexCell(m *Model, off int) (int, int) {
+	for k, r := range m.lines {
+		if r.kind == lineHex && off >= r.index && off < r.index+r.count {
+			j := off - r.index
+			col := 9 + 3*j + 1
+			if j >= 8 {
+				col++
+			}
+			return k, col
+		}
+	}
+	return -1, 0
+}
+
+// cellOf scrolls the box pane to show column col of line k, and returns the screen cell of it.
+func cellOf(m *Model, k, col int) (int, int) {
+	w := m.detail.Width()
+	m.detail.SetYOffset(m.lineRows[k] + col/w)
+	return m.treeW + 1 + col%w, 2 + m.lineRows[k] + col/w - m.detail.YOffset()
+}
+
+// footer returns the last line of the screen.
+func footer(m *Model) string {
+	lines := strings.Split(screen(m), "\n")
+	return lines[len(lines)-1]
+}
+
+func TestMarkField(t *testing.T) {
+	m := newModel(t, "init.mp4", nil, Options{Query: "type:tkhd"})
+	press(m, "tab", "j")
+	if f := footer(m); m.mark != 0 || !strings.Contains(f, "field 1 of 25 · size · u32 · 4 bytes at 0xc1 (+0) · 92") {
+		t.Errorf("mark %d, footer %q", m.mark, f)
+	}
+	press(m, "j", "j", "down", "j")
+	content := m.detail.GetContent()
+	for _, want := range []string{styleMarked.Render("d0 eb cc 19"), styleMarked.Render("creation time")} {
+		if !strings.Contains(content, want) {
+			t.Errorf("content lacks %q", want)
+		}
+	}
+	if f := footer(m); !strings.Contains(f, "field 5 of 25 · creation_time · u32 · 4 bytes at 0xcd (+12)") {
+		t.Errorf("footer %q", f)
+	}
+	press(m, "k")
+	if !strings.Contains(m.detail.GetContent(), styleMarked.Render("00 00 07")) {
+		t.Error("the bytes of the flags are not marked")
+	}
+	press(m, "esc")
+	if f := footer(m); m.mark != -1 || m.result == nil || !strings.Contains(f, "/type:tkhd  1 of 1") {
+		t.Errorf("esc: mark %d, footer %q", m.mark, f)
+	}
+	press(m, "G")
+	if m.mark != 24 {
+		t.Errorf("G marked %d, not the last field", m.mark)
+	}
+	press(m, "g")
+	if m.mark != 0 {
+		t.Errorf("g marked %d, not the first field", m.mark)
+	}
+	press(m, "tab", "j")
+	if got := selectedPath(m); m.mark != -1 || got != "moov/trak/mdia" || strings.Contains(footer(m), "field 1 of") {
+		t.Errorf("j in the tree selected %s, and the mark %d stayed", got, m.mark)
+	}
+
+	// A container has no layout fields, so j scrolls.
+	m = newModel(t, "init.mp4", nil, Options{Query: "type:moov"})
+	press(m, "tab", "j")
+	if m.mark != -1 || m.detail.YOffset() != 1 {
+		t.Errorf("container: mark %d, scrolled to %d", m.mark, m.detail.YOffset())
+	}
+}
+
+func TestPointAtField(t *testing.T) {
+	m := newModel(t, "init.mp4", nil, Options{Query: "type:tkhd"})
+	k, col := hexCell(m, 13) // in creation_time
+	x, y := cellOf(m, k, col)
+	m.Update(tea.MouseMotionMsg{X: x, Y: y})
+	if f := footer(m); m.hover != 4 || !strings.Contains(f, "0xce · 206 · creation_time · u32 · 3505114137") {
+		t.Errorf("byte: hover %d, footer %q", m.hover, f)
+	}
+	if !strings.Contains(m.detail.GetContent(), styleMarked.Render("d0 eb cc 19")) {
+		t.Error("the bytes of the field are not marked")
+	}
+	x, y = cellOf(m, k, 9+49+2+13) // the same byte in the text
+	m.Update(tea.MouseMotionMsg{X: x, Y: y})
+	if m.hover != 4 {
+		t.Errorf("text of the byte: hover %d", m.hover)
+	}
+	x, y = cellOf(m, lineOf(m, lineLayout, 6), 20)
+	m.Update(tea.MouseMotionMsg{X: x, Y: y})
+	if f := footer(m); m.hover != 6 || !strings.Contains(f, "track_ID · u32 · 4 bytes at 0xd5 (+20) · 2") {
+		t.Errorf("layout row: hover %d, footer %q", m.hover, f)
+	}
+	k = lineOf(m, lineField, 6)
+	if k < 0 {
+		t.Fatal("no field linked to track_ID")
+	}
+	x, y = cellOf(m, k, 2)
+	m.Update(tea.MouseMotionMsg{X: x, Y: y})
+	markOn, _, _ := strings.Cut(styleMarked.Render("x"), "x")
+	if row := strings.Split(m.detail.GetContent(), "\n")[lineOf(m, lineLayout, 6)]; m.hover != 6 ||
+		!strings.HasPrefix(row, markOn+"000000d5") {
+		t.Errorf("field entry: hover %d, layout row %q", m.hover, row)
+	}
+	m.Update(tea.MouseMotionMsg{X: 5, Y: 5}) // the tree
+	if m.hover != -1 || m.hoverText != "" {
+		t.Errorf("the tree: hover %d, text %q", m.hover, m.hoverText)
+	}
+
+	// The mouse does not remove a mark of the keys when it leaves the fields.
+	press(m, "tab", "j")
+	k, col = hexCell(m, 13)
+	x, y = cellOf(m, k, col)
+	m.Update(tea.MouseMotionMsg{X: x, Y: y})
+	m.Update(tea.MouseMotionMsg{X: 5, Y: 5})
+	if f := footer(m); m.mark != 0 || !strings.Contains(f, "field 1 of 25") {
+		t.Errorf("mark %d, footer %q", m.mark, f)
+	}
+
+	m = newModel(t, "init.mp4", nil, Options{Query: "type:trak"})
+	k, col = hexCell(m, 9) // in the header of tkhd
+	x, y = cellOf(m, k, col)
+	m.Update(tea.MouseMotionMsg{X: x, Y: y})
+	if f := footer(m); !strings.Contains(f, "0xc2 · 194 · tkhd +1 (click to open)") {
+		t.Errorf("child box byte: footer %q", f)
+	}
+	m.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	if got := selectedPath(m); got != "moov/trak/tkhd" {
+		t.Errorf("click on a byte of tkhd selected %s", got)
+	}
+}
+
+// TestPointerCells checks that each cell of the hex dump that the mouse can point at shows the byte that it
+// points at, also when the rows wrap.
+func TestPointerCells(t *testing.T) {
+	data, err := os.ReadFile("../../testdata/init.mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, size := range [][2]int{{testW, testH}, {60, 15}} {
+		m := newModel(t, "init.mp4", nil, Options{Query: "type:tkhd"})
+		m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+		n := m.selected()
+		seen := map[int]bool{}
+		for off := 0; ; off++ {
+			m.detail.SetYOffset(off)
+			if m.detail.YOffset() != off {
+				break
+			}
+			rows := strings.Split(screen(m), "\n")
+			for y := 2; y < 2+m.detail.Height(); y++ {
+				row := []rune(rows[y])
+				for x := m.treeW + 1; x < m.treeW+1+m.detail.Width(); x++ {
+					ref, col, ok := m.lineAt(x, y)
+					if !ok || ref.kind != lineHex {
+						continue
+					}
+					i, ok := hexByteAt(ref, col)
+					if !ok {
+						continue
+					}
+					b := data[n.Pos+uint64(i)]
+					hx, text := fmt.Sprintf("%02x", b), '.'
+					if b >= 0x20 && b < 0x7f {
+						text = rune(b)
+					}
+					if ch := row[x]; ch != ' ' && ch != rune(hx[0]) && ch != rune(hx[1]) && ch != text {
+						t.Fatalf("%v: cell %d,%d shows %q, not byte %d: %s", size, x, y, ch, i, hx)
+					}
+					seen[i] = true
+				}
+			}
+		}
+		if len(seen) != int(n.Size) {
+			t.Errorf("%v: the mouse finds %d of %d bytes", size, len(seen), n.Size)
+		}
 	}
 }
