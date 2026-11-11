@@ -41,6 +41,10 @@ const layoutStart = 64
 // autoExpandLimit is the largest number of boxes for which the first two levels start expanded.
 const autoExpandLimit = 400
 
+// markHexMax is the most bytes that the hex dump grows to by itself, to show the bytes of a field marked with
+// the keys. The m key shows more.
+const markHexMax = 64 << 10
+
 type pane int
 
 const (
@@ -74,6 +78,15 @@ type Model struct {
 	layoutNode *boxview.Node // the box of layoutRes
 	layoutRes  *layout.Result
 
+	// mark is the field of the layout of the selected box that the keys marked, and hover the field
+	// that the mouse points at, or -1. The field that the mouse points at is shown, or else the marked field:
+	// its row in the layout, its entry in the fields and its bytes. hoverText says what the mouse points at
+	// in the box pane.
+	mark, hover int
+	hoverText   string
+	lines       []lineRef // what each line of the box pane shows
+	lineRows    []int     // the first screen row of each line of the box pane, and the number of rows at the end
+
 	input     textinput.Model
 	searching bool
 	query     string
@@ -96,7 +109,7 @@ type searchDoneMsg struct {
 // New decodes the file in the first size bytes of r and returns the user interface for it.
 func New(r io.ReaderAt, size int64, opts Options) *Model {
 	m := &Model{r: r, size: size, name: opts.Name, levels: opts.Levels, query: opts.Query, hexLimit: hexStart,
-		layoutLimit: layoutStart, width: 100, height: 30}
+		layoutLimit: layoutStart, mark: -1, hover: -1, width: 100, height: 30}
 	m.input = textinput.New()
 	m.input.Prompt = "/"
 	m.input.Placeholder = "type:trun  trackID=1  @1234  hex:000001  is:error  (? for help)"
@@ -130,6 +143,7 @@ func (m *Model) setTree(t *boxview.Tree, keep bool) {
 	m.result, m.matched, m.onlyMatch = nil, nil, false
 	m.rows, m.cursor = nil, 0
 	m.layoutNode, m.layoutRes = nil, nil
+	m.clearMark()
 	var sel *boxview.Node
 	if keep {
 		for _, key := range expandedKeys {
@@ -259,6 +273,7 @@ func (m *Model) setCursor(i int) {
 	if m.selected() != prev {
 		m.hexLimit, m.layoutLimit = hexStart, layoutStart
 		m.showSummary = false
+		m.clearMark()
 		m.updateDetail()
 		m.detail.GotoTop()
 	}
@@ -283,6 +298,7 @@ func (m *Model) layout() {
 }
 
 func (m *Model) updateDetail() {
+	m.lines, m.lineRows = nil, nil
 	if m.showHelp {
 		m.detail.SetContent(helpText())
 		return
@@ -299,7 +315,9 @@ func (m *Model) updateDetail() {
 		m.detail.SetContent(styleFaint.Render("The file has no boxes."))
 		return
 	}
-	m.detail.SetContent(m.detailContent(n, m.detail.Width()))
+	p := m.detailContent(n, m.detail.Width())
+	m.setLines(p)
+	m.detail.SetContentLines(p.lines)
 }
 
 // Update handles a message.
@@ -319,6 +337,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.wheel(msg)
 	case tea.MouseClickMsg:
 		m.click(msg)
+	case tea.MouseMotionMsg:
+		m.point(msg.X, msg.Y, false)
 	}
 	return m, nil
 }
@@ -438,10 +458,14 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		m.detail.GotoTop()
 		return nil
 	case "esc":
-		if m.showHelp || m.showSummary {
+		switch {
+		case m.showHelp || m.showSummary:
 			m.showHelp, m.showSummary = false, false
 			m.updateDetail()
-		} else if m.result != nil {
+		case m.mark >= 0:
+			m.mark = -1
+			m.updateDetail()
+		case m.result != nil:
 			m.clearSearch()
 		}
 		return nil
@@ -482,6 +506,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	if m.focus == detailPane {
+		if m.fieldKey(k) {
+			return nil
+		}
 		var cmd tea.Cmd
 		m.detail, cmd = m.detail.Update(msg)
 		return cmd
@@ -608,6 +635,7 @@ func (m *Model) click(msg tea.MouseClickMsg) {
 	}
 	if msg.X >= m.treeW {
 		m.focus = detailPane
+		m.point(msg.X, msg.Y, true)
 		return
 	}
 	m.focus = treePane
@@ -651,7 +679,7 @@ func (m *Model) View() tea.View {
 	sb.WriteString(m.footer())
 	v := tea.NewView(sb.String())
 	v.AltScreen = true
-	v.MouseMode = tea.MouseModeCellMotion
+	v.MouseMode = tea.MouseModeAllMotion // for pointing at fields and bytes
 	v.WindowTitle = "mp4lens " + m.name
 	return v
 }
@@ -682,6 +710,12 @@ func (m *Model) footer() string {
 		return fit(m.input.View(), m.width)
 	}
 	left := m.status
+	switch {
+	case m.hoverText != "":
+		left = m.hoverText
+	case left == "" && m.mark >= 0:
+		left = m.markText()
+	}
 	if left == "" && m.result != nil {
 		pos := 0
 		if s := m.selected(); s != nil && m.matched[s] {
@@ -699,7 +733,11 @@ func (m *Model) footer() string {
 		left = styleMatch.Render(left)
 	}
 	hints := keyHints([][2]string{{"/", "search"}, {"n/N", "match"}, {"e", "error"}, {"f", "filter"},
-		{"a", "all fields"}, {"s", "summary"}, {"tab", "pane"}, {"?", "help"}, {"q", "quit"}})
+		{"a", "all fields"}, {"s", "summary"}, {"tab", "box pane"}, {"?", "help"}, {"q", "quit"}})
+	if m.focus == detailPane {
+		hints = keyHints([][2]string{{"j/k", "field"}, {"g/G", "first/last"}, {"pgup/pgdn", "scroll"},
+			{"tab", "tree"}, {"esc", "unmark"}, {"/", "search"}, {"?", "help"}, {"q", "quit"}})
+	}
 	space := m.width - ansi.StringWidth(left) - 2
 	if space < 20 {
 		return fit(" "+left, m.width)

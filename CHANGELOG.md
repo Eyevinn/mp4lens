@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Terminal viewer: mark a layout field to see its bytes, as on the web page, with `j` and `k` in the box pane or
+  by pointing with the mouse at a layout row, field or byte; search hits in the bytes are now yellow
+
 ## [0.1.0] - 2026-11-10
 
 First release.

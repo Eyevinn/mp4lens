@@ -43,6 +43,12 @@ mp4lens -summary file.m4a          # print the file summary and exit
 The tree is on the left and the selected box on the right: its path, position, size, header, version and
 flags, decode error, fields, byte layout and bytes, with the header and the child box headers marked in the bytes.
 A file without errors opens with the file summary on the right, until you move in the tree.
+
+As on the web page, a field of the layout can be marked, to see its bytes: its row in the layout, its entry in
+the fields and its bytes are highlighted, and the footer says what it is. Press `tab` to go to the box pane, where
+`j` and `k` mark the next and previous field. With the mouse, point at a layout row, a field or a byte; a click on
+a byte of a child box opens that box.
+
 Press `?` for the keys. The main ones:
 
 | Key | Action |
@@ -56,6 +62,7 @@ Press `?` for the keys. The main ones:
 | `m` | show more bytes and layout fields |
 | `s` | show the file summary |
 | `tab` | switch between the tree and the box pane |
+| `j` `k` `g` `G` in the box pane | mark the next, previous, first and last field of the layout, with its bytes |
 | `q` | quit |
 
 ## Search
@@ -110,8 +117,9 @@ Each box shows two views of its content:
   such as times and fixed-point numbers
 - **Layout**: the fields on the wire, as the mp4ff decoder reads them, with their file position, offset in the
   box, size, kind (such as `u32` or `bytes`), name and raw value. This is the format of the box, also where the
-  mp4ff structs keep the data in another form, such as the cumulative sample numbers of `ctts`. On the web
-  page, pointing at a layout row or a field marks its bytes, and pointing at a byte shows its field
+  mp4ff structs keep the data in another form, such as the cumulative sample numbers of `ctts`. Pointing at a
+  layout row or a field marks its bytes, and pointing at a byte shows its field, on the web page and with the
+  mouse in the terminal, where `j` and `k` in the box pane also step through the fields
 
 Plain container boxes, whose child boxes start right after the header and fill the box, such as `moov` and
 `trak`, are marked as containers and have no fields or layout of their own. Boxes with fields before or after
