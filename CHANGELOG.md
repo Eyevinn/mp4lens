@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-12
+
 ### Added
 
 - Terminal viewer: mark a layout field to see its bytes, as on the web page, with `j` and `k` in the box pane or
@@ -42,5 +44,6 @@ changes, add a link for the version that compares it with the previous one, for 
 [0.2.0]: https://github.com/Eyevinn/mp4lens/compare/v0.1.0...v0.2.0
 and point [Unreleased] at the new version. -->
 
-[Unreleased]: https://github.com/Eyevinn/mp4lens/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Eyevinn/mp4lens/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Eyevinn/mp4lens/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Eyevinn/mp4lens/releases/tag/v0.1.0
