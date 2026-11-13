@@ -28,6 +28,8 @@ type Tree struct {
 	ReadErr error
 	// QuickTime tells why the file is a QuickTime file, or is empty if it is not one.
 	QuickTime string
+	// byName are the nodes by name, in file order.
+	byName map[string][]*Node
 }
 
 // Node is a box in the tree.
@@ -45,6 +47,8 @@ type Node struct {
 	Part *parts.Part
 	// QuickTime tells what is specific to QuickTime in the box or part, or is empty.
 	QuickTime string
+	// order is the order number of the node among the nodes with the same name, in file order.
+	order int
 }
 
 // Field is a line of the Info output of a box, other than its first line.
@@ -71,6 +75,7 @@ func New(bt *boxtree.Tree, r io.ReaderAt) *Tree {
 	t := &Tree{Size: bt.Size}
 	t.Boxes = t.add(bt.Boxes, nil, "", r)
 	t.QuickTime = fileQuickTime(t)
+	t.index()
 	return t
 }
 

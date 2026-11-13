@@ -499,3 +499,11 @@ func TestPointerCells(t *testing.T) {
 		}
 	}
 }
+
+func TestDetailPathOrderNumbers(t *testing.T) {
+	m := newModel(t, "prog_8s.mp4", nil, Options{Query: "type:stsd"})
+	press(m, "n")
+	if s, want := screen(m), "moov › trak[1] › mdia[1] › minf[1] › stbl[1] › stsd[1]"; !strings.Contains(s, want) {
+		t.Errorf("screen lacks %q:\n%s", want, s)
+	}
+}
