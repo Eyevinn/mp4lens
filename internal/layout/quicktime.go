@@ -1,6 +1,7 @@
 package layout
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/Eyevinn/mp4ff/mp4"
@@ -44,6 +45,34 @@ var quickTimeNotes = map[string]map[string]string{
 		"CompressionID":          "QuickTime compression ID; pre_defined (0) in ISOBMFF",
 		"PacketSize":             "QuickTime packet size; reserved (0) in ISOBMFF",
 	},
+}
+
+// countedNameNote is the note of the name of a QuickTime handler that is a counted string.
+const countedNameNote = "QuickTime component name, a counted string: a byte with the length, then the name; " +
+	"zero-terminated UTF-8 in ISOBMFF"
+
+// handlerFields gives the fields of a handler the keys of the Info lines of mp4ff, which has QuickTime names for
+// the fields of a QuickTime handler, and decodes the name of a QuickTime handler that is a counted string. The
+// QuickTime notes must have been added.
+func handlerFields(b *mp4.HdlrBox, fields []Field) {
+	qt := b.QuickTimeComponentType() != ""
+	name, counted := b.QuickTimeComponentName()
+	keys := map[string]string{"bytesLeft": "handlerName"}
+	if qt {
+		keys = map[string]string{"PreDefined": "componentType", "Reserved[0]": "componentManufacturer",
+			"Reserved[1]": "componentFlags", "Reserved[2]": "componentFlagsMask", "bytesLeft": "handlerName"}
+		if counted {
+			keys["bytesLeft"] = "componentName"
+		}
+	}
+	for i := range fields {
+		f := &fields[i]
+		f.Key = keys[f.Name]
+		if f.Name == "bytesLeft" && qt && counted && name != "" {
+			f.Value += " (counted string " + strconv.Quote(name) + ")"
+			f.QuickTime = countedNameNote
+		}
+	}
 }
 
 // soundDescriptionNote is the note of the fields of QuickTime sound descriptions of version 1 and 2, which

@@ -113,7 +113,7 @@ func (m *Model) detailContent(n *boxview.Node, width int) *paneText {
 		add("", styleHead.Render("Fields"))
 		linked, shownKey := linkedFields(res), ""
 		if shown != nil {
-			shownKey = fieldKey(shown.Name)
+			shownKey = fieldKey(*shown)
 		}
 		for i, line := range fieldLines(fields, quickTimeKeys(res), shownKey) {
 			ref := lineRef{}
@@ -530,7 +530,7 @@ func (m *Model) layoutLines(p *paneText, n *boxview.Node, res *layout.Result, sh
 			line += "  " + styleQT.Render("QT")
 			if !seen[f.QuickTime] {
 				seen[f.QuickTime] = true
-				notes = append(notes, styleQT.Render("QT ")+f.Name+": "+f.QuickTime)
+				notes = append(notes, styleQT.Render("QT ")+fieldName(f)+": "+f.QuickTime)
 			}
 		}
 		if shown == &res.Fields[i] {
@@ -570,8 +570,8 @@ func aboutLines(fields []layout.Field) []string {
 	return lines
 }
 
-// quickTimeKeys returns the names of the QuickTime fields of res, as normalKey writes them, without the
-// number of a repeated field.
+// quickTimeKeys returns the keys of the entries of the fields that show the QuickTime fields of res, as fieldKey
+// writes them.
 func quickTimeKeys(res *layout.Result) map[string]bool {
 	keys := map[string]bool{}
 	if res == nil {
@@ -579,8 +579,7 @@ func quickTimeKeys(res *layout.Result) map[string]bool {
 	}
 	for _, f := range res.Fields {
 		if f.QuickTime != "" {
-			name, _, _ := strings.Cut(f.Name, " #")
-			keys[normalKey(name)] = true
+			keys[fieldKey(f)] = true
 		}
 	}
 	return keys

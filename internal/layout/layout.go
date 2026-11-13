@@ -50,6 +50,9 @@ type Field struct {
 	Spec string `json:"spec,omitempty"`
 	// About says what the field is.
 	About string `json:"about,omitempty"`
+	// Key is the key of the Info line of the box that shows the field, when it is not Name, such as
+	// componentType for the PreDefined field of a QuickTime handler. It is empty otherwise.
+	Key string `json:"key,omitempty"`
 }
 
 // Result is the layout of a box.
@@ -100,6 +103,10 @@ func Box(data []byte, pos uint64, skip []Range, maxFields int) *Result {
 		AddDuration(res.Fields, "Duration", uint64(b.Timescale))
 	case *mp4.MdhdBox:
 		AddDuration(res.Fields, "Duration", uint64(b.Timescale))
+	case *mp4.HdlrBox:
+		handlerFields(b, res.Fields)
+	case *mp4.PsshBox:
+		psshFields(b, res.Fields, data, pos)
 	}
 	if len(data) >= 8 {
 		key := string(data[4:8])

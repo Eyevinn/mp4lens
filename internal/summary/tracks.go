@@ -67,7 +67,7 @@ func trackSection(trak, moov *boxview.Node, chapterOf map[uint32][]uint32, frags
 		}
 		s.Title += ": " + kind
 		handler := hdlr.HandlerType
-		if name := printableName(hdlr.Name); name != "" {
+		if name := handlerName(hdlr); name != "" {
 			handler += fmt.Sprintf(" %q", name)
 		}
 		s.add("handler", handler, hdlrNode)

@@ -273,11 +273,33 @@ func TestLayoutAndQuickTime(t *testing.T) {
 	s := screen(m) + ansi.Strip(m.detail.GetContent())
 	for _, want := range []string{"QuickTime file", "QuickTime: QuickTime sound description version 1",
 		"Layout  16 fields as mp4ff reads them", "samples per packet   1024  QT", "samplerate           3145728000 (48000)",
-		"QT SamplesPerPacket: QuickTime sound description field; not in ISOBMFF", "compression_id        -2  QT"} {
+		"QT samples per packet: QuickTime sound description field; not in ISOBMFF", "compression_id        -2  QT"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("screen lacks %q:\n%s", want, s)
 		}
 	}
+	// The fields of a QuickTime handler have QuickTime keys, which are linked to the layout fields.
+	m = newModel(t, "qt_h264_aac.mov", nil, Options{Query: "type:hdlr"})
+	s = ansi.Strip(m.detail.GetContent())
+	for _, want := range []string{"mhlr (media handler)  QT", `"VideoHandler"  QT`,
+		`(counted string "VideoHandler")  QT`, "QT name: QuickTime component name, a counted string"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("hdlr lacks %q:\n%s", want, s)
+		}
+	}
+	for _, link := range []struct{ field, key string }{{"PreDefined", "componentType"}, {"bytesLeft", "componentName"}} {
+		i := -1
+		for j, f := range m.layoutRes.Fields {
+			if f.Name == link.field {
+				i = j
+			}
+		}
+		k := lineOf(m, lineField, i)
+		if k < 0 || !strings.Contains(ansi.Strip(strings.Split(m.detail.GetContent(), "\n")[k]), link.key) {
+			t.Errorf("%s is not linked to %s", link.key, link.field)
+		}
+	}
+
 	m = newModel(t, "init.mp4", nil, Options{Query: "type:SPS"})
 	s = screen(m)
 	for _, want := range []string{"SPS  Sequence Parameter Set, in avcC", "✓ decoded part of avcC", "Width"} {

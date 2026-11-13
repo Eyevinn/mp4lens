@@ -1,6 +1,6 @@
 // Package parts finds the structures inside boxes that the boxes hold as bytes, and decodes them with mp4ff:
-// the parameter sets and SEI messages in avcC, hvcC and vvcC, the OBUs in av1C, and the descriptors and the
-// AudioSpecificConfig in esds.
+// the parameter sets and SEI messages in avcC, hvcC and vvcC, the OBUs in av1C, the descriptors and the
+// AudioSpecificConfig in esds, and the Widevine and PlayReady data in pssh.
 package parts
 
 import (
@@ -42,6 +42,8 @@ func Of(box mp4.Box, data []byte, pos uint64) []*Part {
 		return f.av1C(b)
 	case *mp4.EsdsBox:
 		return esdsParts(data, pos)
+	case *mp4.PsshBox:
+		return psshParts(b, data, pos)
 	}
 	return nil
 }

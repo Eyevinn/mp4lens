@@ -139,3 +139,87 @@ func TestAudioSpecificConfigObjectTypes(t *testing.T) {
 		t.Errorf("short AAC LC: no error\n%v", p.Info)
 	}
 }
+
+func TestPssh(t *testing.T) {
+	data, err := os.ReadFile("../../testdata/init_cenc.cmfv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The file has a Widevine and then a PlayReady pssh box.
+	var ps []*Part
+	for from := 0; ; {
+		i := bytes.Index(data[from:], []byte("pssh"))
+		if i < 0 {
+			break
+		}
+		pos := from + i - 4
+		b := data[pos : pos+int(binary.BigEndian.Uint32(data[pos:]))]
+		box, err := mp4.DecodeBoxSR(uint64(pos), bits.NewFixedSliceReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ps = append(ps, Of(box, b, uint64(pos))...)
+		from = pos + len(b)
+	}
+	if got := summary(ps); got != "WidevinePsshData PlayReadyObject(PlayReadyHeader)" {
+		t.Fatalf("parts %s", got)
+	}
+	const kid = "f057639d-9287-3315-8bf5-50999c4945f7"
+	wv, pr := ps[0], ps[1]
+	if wv.Err != nil || wv.Pos != 796 || wv.Size != 69 || !hasLine(wv, `- provider: "castlabs"`) ||
+		!hasLine(wv, "- keyID[1]: "+kid) {
+		t.Errorf("Widevine at %d size %d err %v: %v", wv.Pos, wv.Size, wv.Err, wv.Info)
+	}
+	hdr := pr.Children[0]
+	if pr.Err != nil || !hasLine(pr, "- length: 786") || !hasLine(pr, "- recordCount: 1") ||
+		hdr.Pos != pr.Pos+6 || hdr.Size != pr.Size-6 || !hasLine(hdr, "- type: 1 (PlayReady Header)") ||
+		!hasLine(hdr, "- KID[1]: "+kid) {
+		t.Errorf("PlayReady at %d err %v: %v\nheader at %d size %d: %v", pr.Pos, pr.Err, pr.Info, hdr.Pos, hdr.Size,
+			hdr.Info)
+	}
+	// The PlayReady Object and its records start with little-endian lengths and types.
+	checkBytes(t, ps, data, map[string][]byte{"WidevinePsshData": {0x08, 0x01}, "PlayReadyObject": {0x12, 0x03, 0, 0}})
+	checkBytes(t, pr.Children, data, map[string][]byte{"PlayReadyHeader": {0x01, 0x00, 0x08, 0x03}})
+}
+
+// psshPartsOf makes a pssh box at position 100, and returns its parts.
+func psshPartsOf(t *testing.T, systemID string, kids []string, data []byte) []*Part {
+	t.Helper()
+	b, err := mp4.NewPsshBox(systemID, kids, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := b.Encode(&buf); err != nil {
+		t.Fatal(err)
+	}
+	box, err := mp4.DecodeBoxSR(100, bits.NewFixedSliceReader(buf.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Of(box, buf.Bytes(), 100)
+}
+
+func TestPsshVersions(t *testing.T) {
+	// A Widevine message with key ID f057639d-9287-3315-8bf5-50999c4945f7 in a version 1 box with two KIDs: the
+	// data follows the header, version and flags, system ID, KID count, KIDs and data size.
+	msg := append([]byte{0x12, 0x10}, 0xf0, 0x57, 0x63, 0x9d, 0x92, 0x87, 0x33, 0x15, 0x8b, 0xf5, 0x50, 0x99, 0x9c, 0x49,
+		0x45, 0xf7)
+	kids := []string{"f057639d-9287-3315-8bf5-50999c4945f7", "00000000-0000-0000-0000-000000000001"}
+	ps := psshPartsOf(t, mp4.UUIDWidevine, kids, msg)
+	if len(ps) != 1 || ps[0].Err != nil || ps[0].Pos != 100+8+4+16+4+2*16+4 ||
+		!hasLine(ps[0], "- keyID[1]: f057639d-9287-3315-8bf5-50999c4945f7") {
+		t.Errorf("version 1: %+v", ps)
+	}
+	// Data that is not a Widevine message is an error of the part.
+	if ps := psshPartsOf(t, mp4.UUIDWidevine, nil, []byte{0xff}); len(ps) != 1 || ps[0].Err == nil {
+		t.Errorf("bad Widevine data: %+v", ps)
+	}
+	if ps := psshPartsOf(t, mp4.UUIDPlayReady, nil, []byte{1, 2, 3}); len(ps) != 1 || ps[0].Err == nil {
+		t.Errorf("bad PlayReady data: %+v", ps)
+	}
+	// Other protection systems have no parts.
+	if ps := psshPartsOf(t, mp4.UUIDFairPlay, nil, msg); len(ps) != 0 {
+		t.Errorf("FairPlay: %+v", ps)
+	}
+}
