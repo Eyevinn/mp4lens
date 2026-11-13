@@ -290,21 +290,24 @@ func childAt(n *boxview.Node, pos uint64) *boxview.Node {
 	return nil
 }
 
-// fieldKey returns the name of a layout field as normalKey writes it, without the number of a repeated field,
-// to match the key of an entry of the fields.
-func fieldKey(name string) string {
-	name, _, _ = strings.Cut(name, " #")
+// fieldKey returns the key of the entry of the fields that shows layout field f, as normalKey writes it: the key
+// that the layout gives f, or else its name without the number of a repeated field.
+func fieldKey(f layout.Field) string {
+	if f.Key != "" {
+		return normalKey(f.Key)
+	}
+	name, _, _ := strings.Cut(f.Name, " #")
 	return normalKey(name)
 }
 
-// linkedFields returns the first field of res for each name, as fieldKey writes it.
+// linkedFields returns the first field of res for each key, as fieldKey writes it.
 func linkedFields(res *layout.Result) map[string]int {
 	linked := map[string]int{}
 	if res == nil {
 		return linked
 	}
 	for i, f := range res.Fields {
-		if k := fieldKey(f.Name); k != "" {
+		if k := fieldKey(f); k != "" {
 			if _, ok := linked[k]; !ok {
 				linked[k] = i
 			}

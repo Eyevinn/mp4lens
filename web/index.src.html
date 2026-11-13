@@ -823,6 +823,9 @@ function hitsIn(start, end) {
 // quicktime_vendor and QuickTimeVendor are the same.
 const normalKey = (k) => String(k).replace(/[ _]/g, "").toLowerCase();
 const baseName = (name) => String(name || "").replace(/ #\d+$/, "");
+// fieldKey writes the key of the entry of the fields that shows layout field f: the key that the layout gives f,
+// such as componentType for the PreDefined field of a QuickTime handler, or else its name.
+const fieldKey = (f) => normalKey(f.key || baseName(f.name));
 // layoutFor returns the layout of n if it has been read.
 const layoutFor = (n) => (state.layout && state.layout.key === n.key ? state.layout : null);
 function renderFields(n) {
@@ -830,8 +833,8 @@ function renderFields(n) {
   const lay = layoutFor(n);
   const qtNotes = new Map(), named = new Set();
   if (lay) for (const f of lay.fields) {
-    named.add(normalKey(baseName(f.name)));
-    if (f.quickTime) qtNotes.set(normalKey(baseName(f.name)), f.quickTime);
+    named.add(fieldKey(f));
+    if (f.quickTime) qtNotes.set(fieldKey(f), f.quickTime);
   }
   return `<div class="fields">` + fields.map((f) => {
     if (!f.key) return `<div class="raw" style="--i:${f.indent || 0}">${esc(f.value)}</div>`;
@@ -1125,7 +1128,7 @@ $("detail").addEventListener("mouseover", (e) => {
   const fieldEl = e.target.closest("[data-field]");
   if (fieldEl) {
     const lay = layoutFor(n);
-    const f = lay && lay.fields.find((x) => normalKey(baseName(x.name)) === fieldEl.dataset.field);
+    const f = lay && lay.fields.find((x) => fieldKey(x) === fieldEl.dataset.field);
     if (f) markField(f.pos, f.size);
     return;
   }

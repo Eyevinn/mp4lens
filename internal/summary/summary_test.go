@@ -71,6 +71,9 @@ func TestSummary(t *testing.T) {
 		{"1.m4s", "File", "structure", "media segment: 1 fragment without moov"},
 		{"1.m4s", "Track 2 (fragments only)", "samples", "60, each 3000 ticks, 2 sync, in 1 track fragment"},
 		{"qt_h264_lpcm.mov", "Track 2: audio", "audio", "48000 Hz, 6 channels, 16 bits"},
+		// The name of a QuickTime handler is a counted string.
+		{"qt_h264_aac.mov", "Track 1: video", "handler", `vide "VideoHandler"`},
+		{"init.mp4", "Track 2: video", "handler", `vide "MobiTV Video Media handler"`},
 	}
 	cache := map[string]*Summary{}
 	for _, tc := range testCases {

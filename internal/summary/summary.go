@@ -624,6 +624,17 @@ func clock(d time.Duration) string {
 	return fmt.Sprintf("%d:%02d:%02d.%03d", h, m, s, ms)
 }
 
+// handlerName returns the name of a handler if it is printable, or "". The name of a QuickTime handler is a
+// counted string, which starts with a byte with its length.
+func handlerName(hdlr *mp4.HdlrBox) string {
+	if hdlr.QuickTimeComponentType() != "" {
+		if name, ok := hdlr.QuickTimeComponentName(); ok {
+			return printableName(name)
+		}
+	}
+	return printableName(hdlr.Name)
+}
+
 // printableName returns name without NUL characters and spaces at its ends, or "" if it is not printable UTF-8.
 func printableName(name string) string {
 	name = strings.Trim(name, "\x00 ")

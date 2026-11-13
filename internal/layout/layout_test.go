@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/Eyevinn/mp4ff/mp4"
 )
 
 // boxAt returns the bytes and position of the first box of type typ in a file in testdata, after skipping
@@ -317,5 +319,71 @@ func TestQuickTimeTextEntry(t *testing.T) {
 	}
 	if f := res.Fields[13]; f.Name != "StyleStart" || f.Spec != "reserved" {
 		t.Errorf("field 13 is %s, spec %s", f.Name, f.Spec)
+	}
+}
+
+// fieldNamed returns the field of res with name, or the zero Field.
+func fieldNamed(res *Result, name string) Field {
+	for _, f := range res.Fields {
+		if f.Name == name {
+			return f
+		}
+	}
+	return Field{}
+}
+
+func TestHandler(t *testing.T) {
+	// A QuickTime media handler, whose fields have QuickTime keys in the Info lines, and whose name is a counted
+	// string.
+	data, pos := boxAt(t, "qt_h264_aac.mov", "hdlr", 0)
+	res := Box(data, pos, nil, 100)
+	keys := map[string]string{"PreDefined": "componentType", "HandlerType": "", "Reserved[0]": "componentManufacturer",
+		"Reserved[2]": "componentFlagsMask", "bytesLeft": "componentName"}
+	for name, key := range keys {
+		if f := fieldNamed(res, name); f.Key != key {
+			t.Errorf("QuickTime %s: key %q, want %q", name, f.Key, key)
+		}
+	}
+	if f := fieldNamed(res, "bytesLeft"); f.Value != `0c566964656f48616e646c6572 (counted string "VideoHandler")` ||
+		f.QuickTime != countedNameNote {
+		t.Errorf("QuickTime name: %+v", f)
+	}
+	// An ISOBMFF handler, whose name is a zero-terminated string.
+	data, pos = boxAt(t, "init.mp4", "hdlr", 0)
+	res = Box(data, pos, nil, 100)
+	if f := fieldNamed(res, "bytesLeft"); f.Key != "handlerName" || f.QuickTime != "" ||
+		fieldNamed(res, "PreDefined").Key != "" {
+		t.Errorf("ISOBMFF name: %+v", f)
+	}
+}
+
+func TestPssh(t *testing.T) {
+	data, pos := boxAt(t, "init_cenc.cmfv", "pssh", 1)
+	res := Box(data, pos, nil, 100)
+	id, size := fieldNamed(res, "SystemID"), fieldNamed(res, "dataLength")
+	if res.Spec != cenc+" 8.1" || id.Spec != "SystemID" || id.Value != mp4.UUIDPlayReady+" (PlayReady)" ||
+		size.Spec != "DataSize" || size.Value != "786" {
+		t.Errorf("spec %q, SystemID %+v, DataSize %+v", res.Spec, id, size)
+	}
+	// A version 1 box has the key IDs.
+	b, err := mp4.NewPsshBox(mp4.UUIDWidevine, []string{"f057639d-9287-3315-8bf5-50999c4945f7",
+		"00000000-0000-0000-0000-000000000001"}, []byte{1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := b.Encode(&buf); err != nil {
+		t.Fatal(err)
+	}
+	res = Box(buf.Bytes(), 0, nil, 100)
+	var kids []string
+	for _, f := range res.Fields {
+		if strings.HasPrefix(f.Spec, "KID") {
+			kids = append(kids, f.Spec+"="+f.Value)
+		}
+	}
+	if got := strings.Join(kids, " "); got !=
+		"KID_count=2 KID[1]=f057639d-9287-3315-8bf5-50999c4945f7 KID[2]=00000000-0000-0000-0000-000000000001" {
+		t.Errorf("KIDs: %s", got)
 	}
 }

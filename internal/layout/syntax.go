@@ -39,6 +39,9 @@ type fieldSyntax struct {
 
 const isobmff = "ISO/IEC 14496-12:2026"
 
+// cenc is the specification of Common Encryption.
+const cenc = "ISO/IEC 23001-7:2023"
+
 // Field syntaxes that several boxes share.
 var (
 	creationTime     = fieldSyntax{"creation_time", "creation time, in seconds since 1904-01-01 UTC", showMacTime}
@@ -195,6 +198,13 @@ var syntaxes = map[string]boxSyntax{
 		"":                         {"reserved", "reserved, 0", nil},
 		"refCount":                 {"reference_count", "number of references that follow", nil},
 		"SubSegmentDuration":       {"subsegment_duration", "duration of the subsegment, in the time scale of the box", nil},
+	}},
+	"pssh": {spec: cenc + " 8.1", fields: map[string]fieldSyntax{
+		"SystemID":   {"SystemID", "identifies the content protection system, such as Widevine or PlayReady", nil},
+		"kidCount":   {"KID_count", "number of key IDs that follow", nil},
+		"KIDs":       {"KID", "key ID of content that the data applies to", nil},
+		"dataLength": {"DataSize", "number of bytes of the data", nil},
+		"Data":       {"Data", "data of the protection system, in its own format", nil},
 	}},
 	// Sample entries, by kind, since they have many types.
 	"visual": {spec: isobmff + " 12.1.3", fields: map[string]fieldSyntax{

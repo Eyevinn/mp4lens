@@ -11,11 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `-extract` writes the bytes of boxes and parts, named by type and order number, such as `moof[0]`, `moof[-1]`
   or `stsd[1]`, to standard output or the `-o` file
+- `pssh` parts: the decoded Widevine data, and the PlayReady Object with its records; the `pssh` layout has the
+  Common Encryption field names and shows the system ID and key IDs as UUIDs
 
 ### Changed
 
 - `-find` and the terminal viewer show the path of a box with the order numbers of repeated boxes, such as
   `moov/trak[1]/mdia[1]/minf[1]/stbl[1]/stsd[1]`
+- mp4ff v0.63.0: the fields show the component fields of QuickTime handlers, `gmin` graphics modes, `lpcm`
+  flags, `colr` code point names and the keys of `ilst` items
+- QuickTime handlers: `componentType` and `componentName` are marked QT and linked to their bytes, and the layout
+  and the summary decode the counted-string name
 
 ## [0.2.0] - 2026-11-12
 

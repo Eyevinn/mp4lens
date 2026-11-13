@@ -154,7 +154,7 @@ sets, such as `TrackID` for `t.TrackID = sr.ReadUint32()`. `go generate ./intern
 names from the mp4ff version in `go.mod`, and CI checks that it is up to date. Repeated reads are numbered, as
 `Matrix[2]` or `SampleSize #3`.
 
-For the common ISOBMFF boxes and the QuickTime atoms that mp4ff decodes, syntax tables in `internal/layout`
+For the common ISOBMFF boxes, `pssh`, and the QuickTime atoms that mp4ff decodes, syntax tables in `internal/layout`
 give the fields their names in the specification, such as `entry_count` and `sample_size[3]`, say what each field
 is, name the specification and clause, and split packed values: the version and flags of a full box with the
 names of the flags, the sample flags of track fragments, the dependency bits of `sdtp`, the references of
@@ -169,6 +169,7 @@ names of the flags, the sample flags of track fragments, the dependency bits of 
 | `vvcC` | NAL units with their headers |
 | `av1C` | OBUs, with the sequence header |
 | `esds` | `ES_Descriptor`, `DecoderConfigDescriptor`, `DecoderSpecificInfo` with the AudioSpecificConfig, and `SLConfigDescriptor` |
+| `pssh` | `WidevinePsshData` of Widevine, and `PlayReadyObject` of PlayReady with its records, such as the PlayReady Header with its XML and key IDs |
 
 ## QuickTime
 
@@ -181,6 +182,8 @@ that ISOBMFF reserves. mp4lens marks them with `QT` and says what they are:
 - the QuickTime meta atom without version and flags, and the terminator at the end of `udta`
 - fields that overlay reserved or pre_defined bytes of ISOBMFF, such as the vendor and quality of sample
   entries, the component type of `hdlr` and the times of `mvhd`, when they are not 0
+- the name of a QuickTime `hdlr`, a counted string instead of the zero-terminated string of ISOBMFF, which the
+  layout and the summary decode
 - the fields of version 1 and 2 sound descriptions, which ISOBMFF does not have
 
 ## How it works
