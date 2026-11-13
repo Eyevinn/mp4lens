@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `-extract` writes the bytes of boxes and parts, named by type and order number, such as `moof[0]`, `moof[-1]`
+  or `stsd[1]`, to standard output or the `-o` file
+
+### Changed
+
+- `-find` and the terminal viewer show the path of a box with the order numbers of repeated boxes, such as
+  `moov/trak[1]/mdia[1]/minf[1]/stbl[1]/stsd[1]`
+
 ## [0.2.0] - 2026-11-12
 
 ### Added

@@ -39,6 +39,7 @@ mp4lens -levels all:1 file.mp4     # with all fields, such as every sample of tr
 mp4lens -search is:error file.mp4  # start at the boxes that cannot be decoded
 mp4lens -find type:emsg file.m4s   # print the matching boxes and exit
 mp4lens -summary file.m4a          # print the file summary and exit
+mp4lens -extract 'moof[0]' file.m4s | xxd  # write the bytes of the first moof box and exit
 ```
 
 The tree is on the left and the selected box on the right: its path, position, size, header, version and
@@ -87,6 +88,28 @@ A box matches a query when it matches all its terms:
 
 Put `-` before a term to match the boxes that do not match it, and quotes around text with spaces:
 `"sample size" -type:stz2`.
+
+## Box names and extraction
+
+Where a file has more than one box of a type, a box is named by its order number among them, counted from 0
+in file order: `moof[0]` is the first moof box, `moof[-1]` the last, and `stsd[1]` the stsd box of the second
+track. `-find`, and the terminal viewer above the selected box, show the path of a box with these names, as
+`moov/trak[1]/mdia[1]/minf[1]/stbl[1]/stsd[1]`.
+
+`-extract` writes the bytes of boxes, one after the other, to standard output or to the file that `-o` names,
+and prints their paths, positions and sizes to standard error:
+
+```sh
+mp4lens -extract 'moof[0]' -o moof.bin file.m4s       # the first moof box
+mp4lens -extract ftyp,moov -o init.mp4 file.mp4       # the init segment of a fragmented file
+mp4lens -extract 'moof[-1],mdat[-1]' -o last.m4s file.mp4  # the last fragment
+mp4lens -extract 'stsd[1]' file.mp4 | xxd             # the stsd box of the second track
+```
+
+A name can be the last name of a path, as `stsd[1]`, the full path that `-find` prints, or the path with only
+the last name numbered, as `moov/trak/mdia/minf/stbl/stsd[1]`. Parts, such as `SPS`, are extracted in the same
+way. Quote names with brackets, which shells otherwise read as file patterns. A box that continues past the end
+of the file is written as far as the file goes, and mp4lens then exits with an error.
 
 ## File summary
 

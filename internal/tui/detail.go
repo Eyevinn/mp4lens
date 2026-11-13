@@ -50,7 +50,7 @@ func (m *Model) detailContent(n *boxview.Node, width int) *paneText {
 	p := &paneText{}
 	add := func(s ...string) { p.add(lineRef{}, s...) }
 
-	add(styleFaint.Render(strings.ReplaceAll(n.Path(), "/", " › ")))
+	add(styleFaint.Render(strings.ReplaceAll(m.tree.RefPath(n), "/", " › ")))
 	head := styleTitle.Render(n.Name())
 	switch ln := n.LongName(); {
 	case n.Part != nil:
