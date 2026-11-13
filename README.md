@@ -3,6 +3,7 @@
 [![Test](https://github.com/Eyevinn/mp4lens/actions/workflows/go.yml/badge.svg)](https://github.com/Eyevinn/mp4lens/actions/workflows/go.yml)
 [![Coverage Status](https://coveralls.io/repos/github/Eyevinn/mp4lens/badge.svg?branch=main)](https://coveralls.io/github/Eyevinn/mp4lens?branch=main)
 [![golangci-lint](https://github.com/Eyevinn/mp4lens/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/Eyevinn/mp4lens/actions/workflows/golangci-lint.yml)
+[![govulncheck](https://github.com/Eyevinn/mp4lens/actions/workflows/govulncheck.yml/badge.svg)](https://github.com/Eyevinn/mp4lens/actions/workflows/govulncheck.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/Eyevinn/mp4lens.svg)](https://pkg.go.dev/github.com/Eyevinn/mp4lens)
 [![license](https://img.shields.io/github/license/Eyevinn/mp4lens.svg)](https://github.com/Eyevinn/mp4lens/blob/main/LICENSE)
 
