@@ -72,6 +72,9 @@ var exampleFiles = []exampleFile{
 	{"mov", "QuickTime movie with AAC audio", "qt_h264_aac.mov", "qt_h264_aac.mov", nil},
 	{"mov-pcm", "QuickTime movie with 5.1 PCM audio", "qt_h264_lpcm.mov", "qt_h264_lpcm.mov", nil},
 	{"chapters", "Audio with chapters, subtitles and iTunes metadata", "chapters_subs.m4a", "chapters_subs.m4a", nil},
+	{"avif", "AVIF image", "ex60.avif", "ex60.avif", nil},
+	{"heic", "HEIC image with a grid, an alpha plane, Exif and XMP", "gradient_grid_alpha.heic",
+		"gradient_grid_alpha.heic", nil},
 	{"truncated", "Truncated init segment", "init_truncated.mp4", "init_truncated.mp4", nil},
 }
 

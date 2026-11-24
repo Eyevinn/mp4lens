@@ -175,6 +175,16 @@ func addSampleEntries(s *Section, stsd *boxview.Node, tkhd *mp4.TkhdBox) {
 			}
 		case *mp4.TimecodeSampleEntryBox:
 			s.add("timecode", timecodeDetails(b), e)
+		case *mp4.MebxBox:
+			if b.Keys != nil {
+				var keys []string
+				for _, k := range b.Keys.Keys {
+					if k.Keyd != nil {
+						keys = append(keys, k.Keyd.Value)
+					}
+				}
+				s.add("keys", strings.Join(keys, ", "), e)
+			}
 		case *mp4.TextSampleEntryBox:
 			if b.Ftab != nil && len(b.Ftab.Fonts) > 0 && b.Ftab.Fonts[0].Name != "" {
 				s.add("font", b.Ftab.Fonts[0].Name, e)
@@ -261,26 +271,10 @@ var (
 func colour(e *mp4.VisualSampleEntryBox) string {
 	var out []string
 	for _, c := range e.Children {
-		colr, ok := c.(*mp4.ColrBox)
-		if !ok {
-			continue
-		}
-		switch colr.ColorType {
-		case "nclx", "nclc":
-			name := func(names map[uint16]string, v uint16) string {
-				if n := names[v]; n != "" {
-					return fmt.Sprintf("%d (%s)", v, n)
-				}
-				return fmt.Sprint(v)
+		if colr, ok := c.(*mp4.ColrBox); ok {
+			if text := colrText(colr); text != "" {
+				out = append(out, text)
 			}
-			text := fmt.Sprintf("primaries %s, transfer %s, matrix %s", name(colourPrimaries, colr.ColorPrimaries),
-				name(transferNames, colr.TransferCharacteristics), name(matrixNames, colr.MatrixCoefficients))
-			if colr.ColorType == "nclx" && colr.FullRangeFlag {
-				text += ", full range"
-			}
-			out = append(out, text)
-		case "rICC", "prof":
-			out = append(out, fmt.Sprintf("ICC profile of %d bytes", len(colr.ICCProfile)))
 		}
 	}
 	var hdr []string
@@ -294,6 +288,28 @@ func colour(e *mp4.VisualSampleEntryBox) string {
 		out = append(out, "HDR metadata: "+strings.Join(hdr, ", "))
 	}
 	return strings.Join(out, "; ")
+}
+
+// colrText returns the colour primaries, transfer and matrix of colr, or the size of its ICC profile, or "".
+func colrText(colr *mp4.ColrBox) string {
+	switch colr.ColorType {
+	case "nclx", "nclc":
+		name := func(names map[uint16]string, v uint16) string {
+			if n := names[v]; n != "" {
+				return fmt.Sprintf("%d (%s)", v, n)
+			}
+			return fmt.Sprint(v)
+		}
+		text := fmt.Sprintf("primaries %s, transfer %s, matrix %s", name(colourPrimaries, colr.ColorPrimaries),
+			name(transferNames, colr.TransferCharacteristics), name(matrixNames, colr.MatrixCoefficients))
+		if colr.ColorType == "nclx" && colr.FullRangeFlag {
+			text += ", full range"
+		}
+		return text
+	case "rICC", "prof":
+		return fmt.Sprintf("ICC profile of %d bytes", len(colr.ICCProfile))
+	}
+	return ""
 }
 
 // audioDetails returns the codec, sampling rate and channels of the audio.

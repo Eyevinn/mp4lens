@@ -39,6 +39,9 @@ type fieldSyntax struct {
 
 const isobmff = "ISO/IEC 14496-12:2026"
 
+// heif is the specification of HEIF images.
+const heif = "ISO/IEC 23008-12:2025"
+
 // cenc is the specification of Common Encryption.
 const cenc = "ISO/IEC 23001-7:2023"
 
@@ -205,6 +208,80 @@ var syntaxes = map[string]boxSyntax{
 		"KIDs":       {"KID", "key ID of content that the data applies to", nil},
 		"dataLength": {"DataSize", "number of bytes of the data", nil},
 		"Data":       {"Data", "data of the protection system, in its own format", nil},
+	}},
+	// Items of HEIF and AVIF images, in the file-level meta box.
+	"pitm": {spec: isobmff + " 8.11.4", fields: map[string]fieldSyntax{
+		"ItemID": {"item_ID", "identifier of the primary item, the image to show", nil},
+	}},
+	"iloc": {spec: isobmff + " 8.11.3"},
+	"iinf": {spec: isobmff + " 8.11.6", fields: map[string]fieldSyntax{
+		"entryCount": {"entry_count", "number of item information entries that follow", nil},
+	}},
+	"infe": {spec: isobmff + " 8.11.6", flags: []flagBit{{0x1, "hidden item"}}, fields: map[string]fieldSyntax{
+		"ItemID":              {"item_ID", "identifier of the item", nil},
+		"ItemProtectionIndex": {"item_protection_index", "protection scheme of the item in ipro, from 1, or 0 for none", nil},
+		"ItemType": {"item_type", "type of the item, such as hvc1, av01 or grid for images, Exif, or mime for a " +
+			"media type", nil},
+		"ItemName":        {"item_name", "name of the item, as zero-terminated UTF-8", nil},
+		"ContentType":     {"content_type", "media type of an item of type mime, such as application/rdf+xml for XMP", nil},
+		"ContentEncoding": {"content_encoding", "content encoding of an item of type mime, such as gzip, or empty", nil},
+		"ItemURIType":     {"item_uri_type", "URI that tells the type of an item of type uri", nil},
+		"ExtensionType":   {"extension_type", "type of the extension, such as fdel", nil},
+		"ExtensionData":   {"extension", "the extension", nil},
+	}},
+	"iref": {spec: isobmff + " 8.11.12"},
+	// The key of the item references in iref, whose box types are reference types.
+	"itemRef": {spec: isobmff + " 8.11.12", fields: map[string]fieldSyntax{
+		"FromItemID": {"from_item_ID", "the item that refers to the others", nil},
+		"refCount":   {"reference_count", "number of items that follow", nil},
+		"ToItemIDs":  {"to_item_ID", "an item that the item refers to", nil},
+	}},
+	"idat": {spec: isobmff + " 8.11.11", fields: map[string]fieldSyntax{
+		"Data": {"data", "data of the items with construction method 1, such as grids", nil},
+	}},
+	"iprp": {spec: isobmff + " 8.11.14"},
+	"ipco": {spec: isobmff + " 8.11.14"},
+	"ipma": {spec: isobmff + " 8.11.14", flags: []flagBit{{0x1, "15-bit property indexes"}}},
+	"ispe": {spec: heif + " 6.5.3", fields: map[string]fieldSyntax{
+		"ImageWidth":  {"image_width", "width of the image in pixels", nil},
+		"ImageHeight": {"image_height", "height of the image in pixels", nil},
+	}},
+	"pixi": {spec: heif + " 6.5.6", fields: map[string]fieldSyntax{
+		"numChannels":    {"num_channels", "number of channels of the image", nil},
+		"BitsPerChannel": {"bits_per_channel", "bits per sample of each channel, a byte each", nil},
+	}},
+	"irot": {spec: heif + " 6.5.10", fields: map[string]fieldSyntax{
+		"Angle": {"reserved, angle", "6 reserved bits and the rotation in 2 bits, in steps of 90 degrees " +
+			"anti-clockwise", showRotation},
+	}},
+	"imir": {spec: heif + " 6.5.12", fields: map[string]fieldSyntax{
+		"Axis": {"reserved, axis", "7 reserved bits and the axis in 1 bit: 0 exchanges top and bottom, 1 left and " +
+			"right", showMirrorAxis},
+	}},
+	"auxC": {spec: heif + " 6.5.8", fields: map[string]fieldSyntax{
+		"AuxType":    {"aux_type", "URN of the type of auxiliary image, such as an alpha plane or a depth map", nil},
+		"AuxSubtype": {"aux_subtype", "data that the type of auxiliary image defines", nil},
+	}},
+	// Multiplexed timed metadata: the sample entry mebx, and its key table, keys and their children. The key
+	// table and the keys are decoded by mebx, and have no syntax of their own here.
+	"mebx": {spec: isobmff + " 12.8.4.1", fields: map[string]fieldSyntax{
+		"DataReferenceIndex": dataReferenceIndex,
+	}},
+	"mebxKeys": {spec: isobmff + " 12.8.4.2"},
+	"mebxKey":  {spec: isobmff + " 12.8.4.3"},
+	"keyd": {spec: isobmff + " 12.8.4.4", fields: map[string]fieldSyntax{
+		"Namespace": {"key_namespace", "how to read the key, such as mdta for reverse DNS names", nil},
+		"Value":     {"key_value", "the key, such as com.apple.quicktime.video-orientation", nil},
+	}},
+	"loca": {spec: isobmff + " 12.8.4.5", fields: map[string]fieldSyntax{
+		"Locale": {"locale_string", "language tag of the values, as in BCP 47", nil},
+	}},
+	"setu": {spec: isobmff + " 12.8.4.6", fields: map[string]fieldSyntax{
+		"Data": {"setup_data", "data that the key needs to read its values", nil},
+	}},
+	"dtyp": {spec: quickTime + ", metadata datatype definition atom", fields: map[string]fieldSyntax{
+		"Namespace": {"datatype namespace", "0 for a well-known type, 1 for a type given by its name", nil},
+		"Value":     {"datatype", "the well-known type as a 32-bit number, or the name of the type", nil},
 	}},
 	// Sample entries, by kind, since they have many types.
 	"visual": {spec: isobmff + " 12.1.3", fields: map[string]fieldSyntax{
@@ -390,6 +467,19 @@ var dataTypes = map[uint64]string{
 	0: "implicit", 1: "UTF-8", 2: "UTF-16", 4: "UTF-8 sort", 5: "UTF-16 sort", 13: "JPEG", 14: "PNG",
 	21: "signed integer", 22: "unsigned integer", 23: "32-bit float", 24: "64-bit float", 27: "BMP",
 	28: "QuickTime metadata atom",
+}
+
+// showRotation writes the rotation of an irot box, from the byte with its angle.
+func showRotation(v uint64) string {
+	return fmt.Sprintf("%d degrees anti-clockwise", v&3*90)
+}
+
+// showMirrorAxis writes what an imir box mirrors, from the byte with its axis.
+func showMirrorAxis(v uint64) string {
+	if v&1 == 0 {
+		return "top and bottom exchanged"
+	}
+	return "left and right exchanged"
 }
 
 // showHundredNanoseconds writes a time in units of 100 ns as a duration.

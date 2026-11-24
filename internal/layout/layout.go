@@ -74,6 +74,21 @@ type Range struct {
 // Box returns the layout of the box in data, which starts at position pos in the file. The fields in skip, such
 // as those of the child boxes, are left out. At most maxFields fields are recorded.
 func Box(data []byte, pos uint64, skip []Range, maxFields int) *Result {
+	return boxLayout(data, pos, skip, maxFields, pos, "")
+}
+
+// Within returns the layout of a box that the decoder of the box that holds it decodes, such as an item
+// reference in iref, since it has another layout on its own. data holds the bytes of the outer box, which starts
+// at position pos in the file, and keep is the inner box. syntax is the key of the syntax table of the inner box,
+// such as itemRef. The fields in skip, such as those of the child boxes of the inner box, are left out.
+func Within(data []byte, pos uint64, keep Range, skip []Range, syntax string, maxFields int) *Result {
+	skip = append(skip, Range{Start: pos, End: keep.Start}, Range{Start: keep.End, End: pos + uint64(len(data))})
+	return boxLayout(data, pos, skip, maxFields, keep.Start, syntax)
+}
+
+// boxLayout returns the layout of the box in data, at position pos in the file, with the fields named by the
+// syntax table synKey of the box at synPos. An empty synKey selects the syntax of the box in data.
+func boxLayout(data []byte, pos uint64, skip []Range, maxFields int, synPos uint64, synKey string) *Result {
 	r := &recorder{FixedSliceReader: bits.NewFixedSliceReader(data), base: pos, skip: skip, max: maxFields}
 	box, err := mp4.DecodeBoxSR(pos, r)
 	res := &Result{Fields: r.fields, Capped: r.capped, Err: err}
@@ -89,6 +104,12 @@ func Box(data []byte, pos uint64, skip []Range, maxFields int) *Result {
 			res.Fields = userDataTexts(b, res.Fields, data, pos)
 		case *mp4.FtypBox, *mp4.StypBox:
 			res.Fields = brands(res.Fields, data, pos)
+		case *mp4.IlocBox:
+			res.Fields, capped = ilocFields(b, res.Fields, data, pos, maxFields)
+			res.Capped = res.Capped || capped
+		case *mp4.IpmaBox:
+			res.Fields, capped = ipmaFields(b, res.Fields, data, pos, maxFields)
+			res.Capped = res.Capped || capped
 		case *mp4.UnknownBox:
 			for i := range res.Fields {
 				if res.Fields[i].Name == "" && res.Fields[i].Kind == "bytes" {
@@ -108,7 +129,12 @@ func Box(data []byte, pos uint64, skip []Range, maxFields int) *Result {
 	case *mp4.PsshBox:
 		psshFields(b, res.Fields, data, pos)
 	}
-	if len(data) >= 8 {
+	if synKey == "itemRef" {
+		nameItemRef(res.Fields, synPos)
+	}
+	if synKey != "" {
+		res.Fields, res.Spec = addSyntax(synKey, synPos, res.Fields)
+	} else if len(data) >= 8 {
 		key := string(data[4:8])
 		switch b := box.(type) {
 		case *mp4.VisualSampleEntryBox:
