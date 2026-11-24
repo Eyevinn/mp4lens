@@ -13,7 +13,6 @@ var quickTimeBoxes = map[string]string{
 	"wide":             "QuickTime atom that makes room for a 64-bit size of the next atom",
 	"wave":             "QuickTime sound information atom, with the decoder configuration of a sound sample description",
 	"chan":             "QuickTime audio channel layout; ISOBMFF has chnl",
-	"keys":             "QuickTime metadata keys",
 	"tmcd":             "QuickTime timecode",
 	"gmhd":             "QuickTime base media information header",
 	"gmin":             "QuickTime base media information",
@@ -43,7 +42,7 @@ var quickTimeBoxes = map[string]string{
 	"raw ":             "QuickTime uncompressed sample entry",
 	"\x00\x00\x00\x00": "QuickTime terminator atom, which ends a list of atoms, such as in wave",
 	"cmov":             "QuickTime compressed movie atom",
-	"mebx":             "QuickTime timed metadata sample entry",
+	"dtyp":             "QuickTime metadata datatype definition atom, in a key of a mebx sample entry",
 	"XMP_":             "XMP metadata in QuickTime user data",
 	"SVQ1":             "Sorenson Video sample entry (QuickTime)", "SVQ3": "Sorenson Video 3 sample entry (QuickTime)",
 	"cvid": "Cinepak sample entry (QuickTime)", "rle ": "QuickTime Animation sample entry",
@@ -57,6 +56,9 @@ var quickTimeBoxes = map[string]string{
 func boxQuickTime(n *Node) string {
 	if note, ok := quickTimeBoxes[n.Type]; ok {
 		return note
+	}
+	if n.Type == "keys" && !inMebx(n) {
+		return "QuickTime metadata keys"
 	}
 	if len(n.Type) == 4 && n.Type[0] == 0xa9 && n.Parent != nil && n.Parent.Type == "udta" {
 		return "QuickTime user data text atom; ISOBMFF files keep such metadata in meta/ilst"

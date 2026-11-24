@@ -10,12 +10,12 @@
 **Try it in your browser at <https://mp4lens.pages.osaas.io/>**. Files are decoded on your own computer and are
 never uploaded. The page is hosted on [Eyevinn Open Source Cloud](https://www.osaas.io).
 
-Look inside MP4 and QuickTime files: the box tree with the position and size of every box, the fields and bytes
+Look inside MP4 and QuickTime files, and HEIF, HEIC and AVIF images: the box tree with the position and size of every box, the fields and bytes
 of each box, where in the bytes each field is, the structures inside boxes such as parameter sets, SEI messages
 and descriptors, and the boxes that cannot be decoded, with the boxes around them still shown. What is specific
 to QuickTime is marked. Search for box types, field values, file positions and bytes. A file summary gives the
 overview that ffprobe and `MP4Box -info` give: brands, duration, metadata, chapters, and for each track its
-codec string, samples and bitrate.
+codec string, samples and bitrate, or the items of an image file.
 
 mp4lens comes as a web page and as a terminal viewer. Both decode with [mp4ff][mp4ff], and both show the same
 things and take the same searches.
@@ -113,10 +113,15 @@ of the file is written as far as the file goes, and mp4lens then exits with an e
 
 ## File summary
 
-The summary has a section for the file, the movie, the metadata, the chapters and each track:
+The summary has a section for the file, the items of an image, the movie, the metadata, the chapters and each
+track:
 
 - **File**: size, brands, and how the boxes are arranged, such as moov before mdat, or an init segment and
   fragments
+- **Items**: the primary item, and for each item of a HEIF, HEIC or AVIF image its codec string, size, bits per
+  channel, rotation, mirroring and colour, the type of an auxiliary image, such as an alpha plane or an HDR gain
+  map, and what the item is for: the primary image, a thumbnail, an auxiliary image or metadata, such as Exif
+  and XMP. A grid lists its rows, columns and tiles, which have no rows of their own
 - **Movie**: duration, and the creation and modification times
 - **Metadata**: the iTunes items in `ilst`, by name, such as Title and Track Number, with their values read, the
   freeform items by their name and domain, the QuickTime metadata by key, and the QuickTime user data texts
@@ -124,14 +129,16 @@ The summary has a section for the file, the movie, the metadata, the chapters an
 - **Tracks**: handler, flags, language, references, sample entries with their codec strings (RFC 6381, such as
   `avc1.64001F` or `mp4a.40.2`), video size and colour, audio format, encryption, duration, the number of
   samples and sync samples, the bitrate from the sample sizes, and the edit list. For a fragmented file, the
-  samples are counted in the track fragments
+  samples are counted in the track fragments. A timed metadata track with a `mebx` sample entry lists its keys
 
 On the web page, a file without errors opens with the summary, and the names of values that come from a box
 select that box. The file name above the summary, the File summary button and the `s` key bring it back.
 Images in the file are shown: the cover art in `covr` and the images of chapter image tracks in the summary, and
 the image of a selected `data` box in the box pane. A box without child boxes whose payload has a JPEG or PNG
 signature in its first 16 bytes, such as a thumbnail that a camera writes in `udta`, is shown as an image from
-there to its end, in the box pane and in the Images section of the summary. A click opens an image on its own.
+there to its end, in the box pane and in the Images section of the summary. The primary item of an AVIF or HEIC
+file shows the whole file as an image: browsers display AVIF, and Safari also HEIC. Where a browser cannot decode
+an image, a note takes its place. A click opens an image on its own.
 
 ## Fields, layout and parts
 
@@ -154,11 +161,18 @@ sets, such as `TrackID` for `t.TrackID = sr.ReadUint32()`. `go generate ./intern
 names from the mp4ff version in `go.mod`, and CI checks that it is up to date. Repeated reads are numbered, as
 `Matrix[2]` or `SampleSize #3`.
 
-For the common ISOBMFF boxes, `pssh`, and the QuickTime atoms that mp4ff decodes, syntax tables in `internal/layout`
+For the common ISOBMFF boxes, the item boxes and properties of HEIF and AVIF images, `mebx`, `pssh`, and the
+QuickTime atoms that mp4ff decodes, syntax tables in `internal/layout`
 give the fields their names in the specification, such as `entry_count` and `sample_size[3]`, say what each field
 is, name the specification and clause, and split packed values: the version and flags of a full box with the
 names of the flags, the sample flags of track fragments, the dependency bits of `sdtp`, the references of
-`sidx`, and the language of `mdhd`. Fixed-point values and times are also shown in their meaning.
+`sidx`, the field sizes of `iloc`, the property associations of `ipma`, and the language of `mdhd`. Fixed-point
+values and times are also shown in their meaning.
+
+Some boxes are decoded by the box that holds them, since their type alone does not tell their layout: the item
+references in `iref`, whose types, such as `cdsc`, are also track reference types, and the key table and keys
+of a `mebx` sample entry, whose types are key IDs. Their layout comes from the decoder of the outer box, and
+their names from where they are, such as Item Reference: Content Description Of.
 
 **Parts** are the structures that boxes hold as bytes, decoded with mp4ff and shown as children of the box:
 

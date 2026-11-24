@@ -87,6 +87,9 @@ func Of(t *boxview.Tree, r io.ReaderAt) *Summary {
 	s := &Summary{Sections: []Section{fileSection(t)}}
 	moov := topBox(t, "moov")
 	frags := fragmentStats(t, moov)
+	if sec := itemsSection(t, r); len(sec.Rows) > 0 {
+		s.Sections = append(s.Sections, sec)
+	}
 	if moov == nil {
 		for _, id := range sortedIDs(frags) {
 			s.Sections = append(s.Sections, fragmentTrackSection(id, frags[id]))
@@ -225,6 +228,9 @@ func structure(t *boxview.Tree) string {
 		return "progressive, moov before mdat"
 	case moov >= 0:
 		return "moov after mdat"
+	}
+	if meta := boxOf[*mp4.MetaBox](topBox(t, "meta")); meta != nil && meta.Iinf != nil {
+		return fmt.Sprintf("still image: %s in meta, no moov", plural(len(meta.Iinf.Infes), "item"))
 	}
 	return "no moov"
 }

@@ -28,15 +28,18 @@ func (t *Tree) Layout(n *Node, r io.ReaderAt) *layout.Result {
 		}
 		return layout.Header(hdr, n.Pos)
 	}
-	data := make([]byte, avail)
-	if _, err := r.ReadAt(data, int64(n.Pos)); err != nil {
-		return &layout.Result{Err: err}
-	}
 	var skip []layout.Range
 	for _, c := range n.Children {
 		if c.IsBox() {
 			skip = append(skip, layout.Range{Start: c.Pos, End: c.End()})
 		}
+	}
+	if outer, syntax := decodedBy(n); outer != nil {
+		return t.layoutWithin(n, outer, syntax, skip, r)
+	}
+	data := make([]byte, avail)
+	if _, err := r.ReadAt(data, int64(n.Pos)); err != nil {
+		return &layout.Result{Err: err}
 	}
 	res := layout.Box(data, n.Pos, skip, MaxLayoutFields)
 	switch {
@@ -48,6 +51,37 @@ func (t *Tree) Layout(n *Node, r io.ReaderAt) *layout.Result {
 		layout.AddDuration(res.Fields, "FragmentDuration", movieTimescale(n))
 	}
 	return res
+}
+
+// decodedBy returns the box that decodes the box of n, when it is not n itself, and the key of the syntax of the
+// box of n: the iref box for an item reference, whose type is a reference type, such as cdsc, that has another
+// layout as a track reference, and the mebx sample entry for its key table, which has another layout than the
+// keys box of QuickTime metadata, and for the keys in it, whose types are key IDs.
+func decodedBy(n *Node) (*Node, string) {
+	switch p := n.Parent; {
+	case p == nil:
+		return nil, ""
+	case p.Type == "iref":
+		return p, "itemRef"
+	case n.Type == "keys" && inMebx(n):
+		return p, "mebxKeys"
+	case p.Type == "keys" && inMebx(p):
+		return p.Parent, "mebxKey"
+	}
+	return nil, ""
+}
+
+// layoutWithin returns the layout of the box of n, which the box of outer decodes, read from r. The fields in skip
+// are left out.
+func (t *Tree) layoutWithin(n, outer *Node, syntax string, skip []layout.Range, r io.ReaderAt) *layout.Result {
+	if outer.End() > uint64(t.Size) || outer.Size > maxLayoutRead {
+		return nil
+	}
+	data := make([]byte, outer.Size)
+	if _, err := r.ReadAt(data, int64(outer.Pos)); err != nil {
+		return &layout.Result{Err: err}
+	}
+	return layout.Within(data, outer.Pos, layout.Range{Start: n.Pos, End: n.End()}, skip, syntax, MaxLayoutFields)
 }
 
 // movieTimescale returns the time scale of the mvhd box in the moov box two levels up from n, or 0.

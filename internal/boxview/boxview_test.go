@@ -496,3 +496,77 @@ func TestDurations(t *testing.T) {
 		}
 	}
 }
+
+func TestImageItems(t *testing.T) {
+	for _, file := range []string{"ex60.avif", "gradient_grid_alpha.heic"} {
+		tr, r := decodeFile(t, file, nil)
+		if len(tr.Errors()) != 0 || tr.QuickTime != "" {
+			t.Errorf("%s: errors %v, QuickTime %q", file, tr.Errors(), tr.QuickTime)
+		}
+		for _, n := range tr.Nodes {
+			if n.Unknown() || n.QuickTime != "" || (n.IsBox() && n.LongName() == "") {
+				t.Errorf("%s: %s unknown %v, QuickTime %q, name %q", file, n.Path(), n.Unknown(), n.QuickTime,
+					n.LongName())
+			}
+			res := tr.Layout(n, r)
+			if res == nil || n.Type == "mdat" {
+				continue
+			}
+			// Boxes that are also in sample entries, such as hvcC and colr, have no syntax yet.
+			noSyntax := map[string]bool{"meta": true, "dinf": true, "av1C": true, "hvcC": true, "colr": true, "clli": true}
+			if res.Err != nil || res.Spec == "" && !noSyntax[n.Type] {
+				t.Errorf("%s: %s layout error %v, spec %q", file, n.Path(), res.Err, res.Spec)
+			}
+			for _, f := range res.Fields {
+				if f.Name == "" {
+					t.Errorf("%s: %s field without a name: %+v", file, n.Path(), f)
+				}
+			}
+		}
+	}
+	tr, r := decodeFile(t, "gradient_grid_alpha.heic", nil)
+	cdsc := byPath(t, tr, "meta/iref/cdsc")
+	if cdsc.LongName() != "Item Reference: Content Description Of" {
+		t.Errorf("cdsc name %q", cdsc.LongName())
+	}
+	res := tr.Layout(cdsc, r)
+	if got := strings.Join([]string{res.Fields[2].Spec, res.Fields[2].Value}, "="); got != "from_item_ID=7" {
+		t.Errorf("cdsc layout: %+v", res.Fields)
+	}
+}
+
+// mebxEntry is a mebx sample entry of an iPhone movie, with one key.
+const mebxEntry = "\x00\x00\x00umebx\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00ekeys\x00\x00\x00]\x00\x00\x00\x01" +
+	"\x00\x00\x001keydmdtacom.apple.quicktime.video-orientation\x00\x00\x00\x10dtyp\x00\x00\x00\x00\x00\x00\x00B" +
+	"\x00\x00\x00\x14sdpd\x00\x00\x00\x0csdpi\x00\x00\x00\x00"
+
+func TestMebx(t *testing.T) {
+	r := strings.NewReader(mebxEntry)
+	tr := Decode(r, int64(len(mebxEntry)), "")
+	testCases := []struct {
+		path, name, quickTime, spec string
+	}{
+		{"mebx", "Timed Metadata Sample Entry", "", "ISO/IEC 14496-12:2026 12.8.4.1"},
+		{"mebx/keys", "Metadata Key Table", "", "ISO/IEC 14496-12:2026 12.8.4.2"},
+		{`mebx/keys/\x00\x00\x00\x01`, "Metadata Key", "", "ISO/IEC 14496-12:2026 12.8.4.3"},
+		{`mebx/keys/\x00\x00\x00\x01/keyd`, "Metadata Key Declaration", "", "ISO/IEC 14496-12:2026 12.8.4.4"},
+		{`mebx/keys/\x00\x00\x00\x01/dtyp`, "Metadata Datatype",
+			"QuickTime metadata datatype definition atom, in a key of a mebx sample entry",
+			"QuickTime File Format, metadata datatype definition atom"},
+	}
+	for _, tc := range testCases {
+		n := byPath(t, tr, tc.path)
+		res := tr.Layout(n, r)
+		if n.LongName() != tc.name || n.QuickTime != tc.quickTime || res.Err != nil || res.Spec != tc.spec {
+			t.Errorf("%q: name %q, QuickTime %q, layout error %v, spec %q", tc.path, n.LongName(), n.QuickTime,
+				res.Err, res.Spec)
+		}
+	}
+	// The keys box of QuickTime metadata keeps its name and note.
+	qt, _ := decodeFile(t, "qt_h264_aac.mov", nil)
+	for _, n := range qt.Nodes {
+		if n.Type == "keys" && (n.LongName() != "QuickTime Metadata Keys" || n.QuickTime != "QuickTime metadata keys") {
+			t.Errorf("QuickTime keys: %q %q", n.LongName(), n.QuickTime)
+		}
+	}
+}

@@ -59,4 +59,43 @@ var boxNames = map[string]string{
 	"tvsn": "TV Season", "tves": "TV Episode", "tven": "TV Episode ID", "tvnn": "TV Network",
 	"pcst": "Podcast", "purl": "Podcast URL", "egid": "Podcast Episode GUID", "catg": "Category",
 	"keyw": "Keywords", "----": "Freeform Item", "mean": "Freeform Item Domain",
+	// Items of HEIF and AVIF images, and their properties.
+	"pitm": "Primary Item", "iloc": "Item Location", "iinf": "Item Information", "infe": "Item Information Entry",
+	"iref": "Item Reference", "idat": "Item Data", "iprp": "Item Properties", "ipco": "Item Property Container",
+	"ipma": "Item Property Association", "ispe": "Image Spatial Extents", "pixi": "Pixel Information",
+	"irot": "Image Rotation", "imir": "Image Mirroring", "auxC": "Auxiliary Type",
+	// Multiplexed timed metadata.
+	"mebx": "Timed Metadata Sample Entry", "keyd": "Metadata Key Declaration", "dtyp": "Metadata Datatype",
+	"loca": "Metadata Locale", "setu": "Metadata Setup",
+}
+
+// itemReferenceNames are the names of the reference types of the children of iref.
+var itemReferenceNames = map[string]string{
+	"dimg": "Derived Image Inputs", "thmb": "Thumbnail Of", "auxl": "Auxiliary Image Of",
+	"cdsc": "Content Description Of", "prem": "Premultiplied Alpha", "base": "Base Image", "exbl": "Scalable Image",
+	"pred": "Predictive Image", "tbas": "Tile Base", "iloc": "Item Location Of",
+}
+
+// contextName returns the name of a box whose type alone does not tell what it is, from the box it is in: the
+// item references in iref, and the key table and keys of a mebx sample entry. It returns "" for other boxes.
+func contextName(n *Node) string {
+	switch {
+	case n.Parent == nil:
+		return ""
+	case n.Parent.Type == "iref":
+		if name := itemReferenceNames[n.Type]; name != "" {
+			return "Item Reference: " + name
+		}
+		return "Item Reference"
+	case n.Type == "keys" && n.Parent.Type == "mebx":
+		return "Metadata Key Table"
+	case n.Parent.Type == "keys" && inMebx(n.Parent):
+		return "Metadata Key"
+	}
+	return ""
+}
+
+// inMebx tells if n is a direct child of a mebx sample entry.
+func inMebx(n *Node) bool {
+	return n.Parent != nil && n.Parent.Type == "mebx"
 }

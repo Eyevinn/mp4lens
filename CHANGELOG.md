@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- HEIF, HEIC and AVIF images: names, layouts and syntax of the item boxes and properties, such as `iloc`,
+  `iref`, `ipma`, `ispe` and `irot`, and an Items section in the summary, with the image of AVIF files, and of
+  HEIC files in Safari
+- Timed metadata `mebx`: names and layouts of its key table, keys and their boxes, and its keys in the summary
+
+### Changed
+
+- mp4ff v0.64.0, which decodes the item boxes and `mebx`
+- `mebx` is no longer marked as QuickTime, nor is a `keys` box in it
+
 ## [0.3.0] - 2026-11-13
 
 ### Added

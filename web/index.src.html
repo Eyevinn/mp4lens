@@ -979,7 +979,8 @@ function imageHtml(pos, size, mime, cls) {
   return `<a data-img="${pos},${size},${esc(mime)}" target="_blank" rel="noopener"><img class="${cls}" alt="${esc(mime)} image of ${fmtInt(size)} bytes"></a>`;
 }
 // fillImages sets the sources of the images that imageHtml made in the box pane, as object URLs of slices of the
-// file, and revokes those of the previous content.
+// file, and revokes those of the previous content. An image that the browser cannot decode, such as HEIC outside
+// Safari, is replaced by a note.
 function fillImages() {
   for (const u of state.imageURLs) URL.revokeObjectURL(u);
   state.imageURLs = [];
@@ -988,7 +989,15 @@ function fillImages() {
     const url = URL.createObjectURL(state.file.blob.slice(Number(pos), Number(pos) + Number(size), mime));
     state.imageURLs.push(url);
     a.href = url;
-    a.querySelector("img").src = url;
+    const img = a.querySelector("img");
+    img.addEventListener("error", () => {
+      const note = document.createElement("div");
+      note.className = "imgnote";
+      note.textContent = `This browser cannot show this ${mime.replace("image/", "").toUpperCase()} image` +
+        (mime === "image/heic" ? "; Safari can." : ".");
+      a.replaceWith(note);
+    }, { once: true });
+    img.src = url;
   }
 }
 // imageOf returns the image in the value of a data box n of a metadata item, as { pos, size, mime }, or null.

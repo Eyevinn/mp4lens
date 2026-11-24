@@ -193,3 +193,50 @@ func TestAudioDetailsAAC(t *testing.T) {
 		}
 	}
 }
+
+func TestImageItems(t *testing.T) {
+	testCases := []struct {
+		file, row, want string
+	}{
+		{"ex60.avif", "primary item", "item 1"},
+		{"ex60.avif", "item 1", "av01.0.01M.08 600x338, 8 bits, 3 channels, primary image, 10235 bytes"},
+		{"gradient_grid_alpha.heic", "item 3", "grid 1024x64, 1 row and 2 columns of tiles hvc1.3.E.L90.B0 " +
+			"512x512 (items 1, 2, 1086 bytes), 8 bits, 3 channels, primaries 2, transfer 2, matrix 6 (BT.601 525), " +
+			"full range, primary image"},
+		{"gradient_grid_alpha.heic", "item 6", "grid 1024x64, 1 row and 2 columns of tiles hvc1.4.10.L90.BF.C8 " +
+			"512x512 (items 4, 5, 348 bytes), alpha plane, 8 bits, 1 channel, hidden, auxiliary image of item 3"},
+		{"gradient_grid_alpha.heic", "item 7", "Exif, hidden, metadata of item 3, 72 bytes"},
+		{"gradient_grid_alpha.heic", "item 8", "mime application/rdf+xml, hidden, metadata of item 3, 572 bytes"},
+	}
+	for _, tc := range testCases {
+		if got := value(t, summaryOf(t, tc.file), "Items", tc.row); got != tc.want {
+			t.Errorf("%s %s:\n got %q\nwant %q", tc.file, tc.row, got, tc.want)
+		}
+	}
+	heic := summaryOf(t, "gradient_grid_alpha.heic")
+	if got := value(t, heic, "File", "structure"); got != "still image: 8 items in meta, no moov" {
+		t.Errorf("structure: %q", got)
+	}
+	// A browser may show an AVIF or HEIC file as an image: the row of the primary item has the whole file.
+	images := 0
+	for _, sec := range heic.Sections {
+		for _, r := range sec.Rows {
+			if r.Name == "item 1" {
+				t.Errorf("row %+v: tiles are in their grid", r)
+			}
+			if r.Image != nil {
+				images++
+				if r.Name != "item 3" || *r.Image != (Image{Pos: 0, Size: 3144, Type: "image/heic"}) {
+					t.Errorf("HEIC image in row %+v: %+v", r, r.Image)
+				}
+			}
+		}
+	}
+	if images != 1 {
+		t.Errorf("%d HEIC images, want 1", images)
+	}
+	avif := summaryOf(t, "ex60.avif")
+	if img := avif.Sections[1].Rows[1].Image; img == nil || *img != (Image{Pos: 0, Size: 10485, Type: "image/avif"}) {
+		t.Errorf("AVIF image: %+v", img)
+	}
+}
